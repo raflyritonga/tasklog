@@ -18,6 +18,7 @@ services:
       retries: 12
 
   api:
+    image: ghcr.io/${GHCR_OWNER:-raflyritonga}/tasklog-api:${IMG_TAG:-dev}
     build: ./app/api
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-tasklog}:${POSTGRES_PASSWORD:-tasklog}@pg:5432/${POSTGRES_DB:-tasklog}?sslmode=disable
@@ -31,6 +32,7 @@ services:
         condition: service_healthy
 
   web:
+    image: ghcr.io/${GHCR_OWNER:-raflyritonga}/tasklog-web:${IMG_TAG:-dev}
     build: ./app/web
     environment:
       NUXT_API_PROXY_TARGET: http://api:8080

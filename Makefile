@@ -31,7 +31,8 @@ dev-ghcr:
 	docker compose -f compose.yaml -f compose.ghcr.yaml up -d --wait
 
 o11y-up:
-	@echo "o11y-up: not implemented yet (Stage B, phase 4)"
+	bash deploy/compose/render.sh
+	docker compose -f compose.yaml -f compose.o11y.yaml up -d --build --wait
 
 up:
 	@echo "up: not implemented yet (Stage C, phase 6)"
@@ -61,4 +62,4 @@ secrets:
 	@echo "secrets: not implemented yet (Stage C, phase 6)"
 
 down:
-	docker compose down --remove-orphans
+	docker compose -f compose.yaml -f compose.o11y.yaml down --remove-orphans
