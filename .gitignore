@@ -1,0 +1,6 @@
+docs/
+.env
+kubeconfig
+node_modules/
+dist/
+.output/
