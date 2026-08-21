@@ -1,0 +1,50 @@
+package obs
+
+import (
+	"context"
+	"errors"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+)
+
+func Setup(ctx context.Context, endpoint, version string) (func(context.Context) error, error) {
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	if endpoint == "" {
+		return func(context.Context) error { return nil }, nil
+	}
+	res := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceName("tasklog-api"),
+		semconv.ServiceVersion(version),
+		attribute.String("deployment.environment", "poc"),
+	)
+	traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithEndpointURL(endpoint))
+	if err != nil {
+		return nil, err
+	}
+	tracerProvider := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(traceExporter),
+		sdktrace.WithResource(res),
+	)
+	otel.SetTracerProvider(tracerProvider)
+	metricExporter, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithEndpointURL(endpoint))
+	if err != nil {
+		return nil, err
+	}
+	meterProvider := sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter)),
+		sdkmetric.WithResource(res),
+	)
+	otel.SetMeterProvider(meterProvider)
+	return func(shutdownCtx context.Context) error {
+		return errors.Join(tracerProvider.Shutdown(shutdownCtx), meterProvider.Shutdown(shutdownCtx))
+	}, nil
+}
