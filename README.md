@@ -47,10 +47,10 @@ Missing SaaS variables are fine: any exporter or sink without credentials is sim
 ### Stage A — app on Docker Compose
 
 ```bash
-docker compose up
+make dev
 ```
 
-App at `http://localhost:3000`. (Available after phase 2.)
+Builds and starts postgres, redis, api, and web. App at `http://localhost:3000` — the database is seeded with 50 tasks on first boot. `make down` stops everything.
 
 ### Stage A — run from public GHCR images
 

@@ -17,6 +17,39 @@ services:
       timeout: 3s
       retries: 12
 
+  api:
+    build: ./app/api
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-tasklog}:${POSTGRES_PASSWORD:-tasklog}@pg:5432/${POSTGRES_DB:-tasklog}?sslmode=disable
+      REDIS_ADDR: redis:6379
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build: ./app/web
+    environment:
+      NUXT_API_PROXY_TARGET: http://api:8080
+      NUXT_PUBLIC_RUM_PROVIDER: ${NUXT_PUBLIC_RUM_PROVIDER:-datadog}
+      NUXT_PUBLIC_DD_SITE: ${DD_SITE:-}
+      NUXT_PUBLIC_DD_RUM_APP_ID: ${DD_RUM_APP_ID:-}
+      NUXT_PUBLIC_DD_RUM_CLIENT_TOKEN: ${DD_RUM_CLIENT_TOKEN:-}
+      NUXT_PUBLIC_DT_RUM_SCRIPT_URL: ${DT_RUM_SCRIPT_URL:-}
+      NUXT_PUBLIC_ELASTIC_APM_ENDPOINT: ${ELASTIC_APM_ENDPOINT:-}
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      - api
+
   redis:
     image: redis:7.4.5-alpine
     ports:

@@ -24,7 +24,7 @@ help:
 	@echo "  make down          stop and remove everything"
 
 dev:
-	@echo "dev: not implemented yet (Stage A, phase 2)"
+	docker compose up -d --build --wait
 
 dev-ghcr:
 	@echo "dev-ghcr: not implemented yet (Stage A, phase 3)"
@@ -60,4 +60,4 @@ secrets:
 	@echo "secrets: not implemented yet (Stage C, phase 6)"
 
 down:
-	@echo "down: not implemented yet (Stage A, phase 2)"
+	docker compose down --remove-orphans
