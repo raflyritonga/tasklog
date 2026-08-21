@@ -58,14 +58,14 @@ Builds and starts postgres, redis, api, and web. App at `http://localhost:3000` 
 make dev-ghcr
 ```
 
-Pulls `ghcr.io/<GHCR_OWNER>/tasklog-api` and `.../tasklog-web` instead of building locally. Requires `GHCR_OWNER` in `.env` and both GHCR packages set to Public. Pin a specific build with `IMG_TAG=sha-<short>` (defaults to `latest`). Equivalent raw command:
+Pulls `ghcr.io/<GHCR_OWNER>/tasklog-api` and `.../tasklog-web` instead of building locally. Requires `GHCR_OWNER` in `.env` and both GHCR packages set to Public. Pin a specific build with `IMG_TAG=sha-<short>` (defaults to `dev`). Equivalent raw command:
 
 ```bash
 docker compose -f compose.yaml -f compose.ghcr.yaml pull
 docker compose -f compose.yaml -f compose.ghcr.yaml up -d
 ```
 
-CI builds and pushes both images on every push to `main`, tagged `latest` and `sha-<short>`.
+CI builds and pushes both images on every push to `main`, tagged `dev` and `sha-<short>`. `compose.yaml` also names the GHCR images directly (with local `build:` as fallback), so a plain `docker compose up` pulls the published images once the packages are public.
 
 ### Stage B — observability pipeline on Compose
 
@@ -73,7 +73,7 @@ CI builds and pushes both images on every push to `main`, tagged `latest` and `s
 make o11y-up
 ```
 
-Grafana at `http://localhost:3001`. (Available after phase 4.)
+Renders the collector and Vector configs from snippets (SaaS exporters appear only for credentials present in `.env` — with an empty `.env` you get the pure Grafana stack), then starts the app plus otel-collector, Vector, Grafana (`http://localhost:3001`), Prometheus (`:9090`), Loki (`:3100`), and Tempo (`:3200`).
 
 ### Stage C — Kubernetes
 

@@ -1,0 +1,13 @@
+[sinks.elastic]
+type = "elasticsearch"
+inputs = ["parsed"]
+endpoints = ["__ELASTIC_ES_ENDPOINT__"]
+api_version = "v8"
+mode = "bulk"
+
+[sinks.elastic.bulk]
+action = "create"
+index = "logs-tasklog-default"
+
+[sinks.elastic.request.headers]
+Authorization = "ApiKey ${ELASTIC_API_KEY}"

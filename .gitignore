@@ -1,5 +1,7 @@
 docs/
 .env
+deploy/compose/otel-collector.yaml
+deploy/compose/vector.toml
 kubeconfig
 node_modules/
 dist/
