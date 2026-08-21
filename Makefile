@@ -1,6 +1,8 @@
 .DEFAULT_GOAL := help
 
 API_URL ?= http://localhost:8080
+LOAD_URL ?= http://localhost:3000
+K6_DURATION ?= 10m
 DEMO_MS ?= 800
 DEMO_RATE ?= 0.5
 
@@ -31,7 +33,7 @@ dev-ghcr:
 	docker compose -f compose.yaml -f compose.ghcr.yaml up -d --wait
 
 o11y-up:
-	bash deploy/compose/render.sh
+	bash deploy/render.sh
 	docker compose -f compose.yaml -f compose.o11y.yaml up -d --build --wait
 
 up:
@@ -44,7 +46,7 @@ seed:
 	docker compose exec pg psql -U tasklog -d tasklog -c "select seed_tasks();"
 
 load:
-	@echo "load: not implemented yet (Stage C, phase 11)"
+	k6 run -e BASE_URL=$(LOAD_URL) -e DURATION=$(K6_DURATION) load/k6.js
 
 demo-latency:
 	curl -sS -X POST -H "content-type: application/json" -d '{"ms":$(DEMO_MS)}' $(API_URL)/api/demo/latency

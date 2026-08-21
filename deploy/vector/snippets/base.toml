@@ -2,6 +2,14 @@
 type = "docker_logs"
 include_labels = ["com.docker.compose.project=tasklog"]
 
+[sources.internal]
+type = "internal_metrics"
+
+[sinks.prom_exporter]
+type = "prometheus_exporter"
+inputs = ["internal"]
+address = "0.0.0.0:9598"
+
 [transforms.parsed]
 type = "remap"
 inputs = ["docker"]
