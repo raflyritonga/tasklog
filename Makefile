@@ -1,5 +1,9 @@
 .DEFAULT_GOAL := help
 
+API_URL ?= http://localhost:8080
+DEMO_MS ?= 800
+DEMO_RATE ?= 0.5
+
 .PHONY: help dev dev-ghcr o11y-up up deploy seed load demo-latency demo-errors demo-reset dashboards secrets down
 
 help:
@@ -35,19 +39,19 @@ deploy:
 	@echo "deploy: not implemented yet (Stage C, phase 7)"
 
 seed:
-	@echo "seed: not implemented yet (Stage A, phase 1)"
+	docker compose exec pg psql -U tasklog -d tasklog -c "select seed_tasks();"
 
 load:
 	@echo "load: not implemented yet (Stage C, phase 11)"
 
 demo-latency:
-	@echo "demo-latency: not implemented yet (Stage A, phase 1)"
+	curl -sS -X POST -H "content-type: application/json" -d '{"ms":$(DEMO_MS)}' $(API_URL)/api/demo/latency
 
 demo-errors:
-	@echo "demo-errors: not implemented yet (Stage A, phase 1)"
+	curl -sS -X POST -H "content-type: application/json" -d '{"rate":$(DEMO_RATE)}' $(API_URL)/api/demo/errors
 
 demo-reset:
-	@echo "demo-reset: not implemented yet (Stage A, phase 1)"
+	curl -sS -X POST $(API_URL)/api/demo/reset
 
 dashboards:
 	@echo "dashboards: not implemented yet (Stage C, phase 10)"
