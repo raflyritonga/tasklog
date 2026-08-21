@@ -26,7 +26,7 @@ type summary struct {
 	Done  int64 `json:"done"`
 }
 
-const summaryQuery = "select (select count(*) from tasks) as total, (select count(*) from tasks where status = 'todo') as todo, (select count(*) from tasks where status = 'doing') as doing, (select count(*) from tasks where status = 'done') as done from pg_sleep(0.3)"
+const summaryQuery = "select (select count(*) from tasks) as total, (select count(*) from tasks where status = 'todo') as todo, (select count(*) from tasks where status = 'doing') as doing, (select count(*) from tasks where status = 'done') as done"
 
 func (h *Handler) summary(c echo.Context) error {
 	var s summary
