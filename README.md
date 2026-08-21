@@ -55,11 +55,17 @@ Builds and starts postgres, redis, api, and web. App at `http://localhost:3000` 
 ### Stage A — run from public GHCR images
 
 ```bash
-docker compose -f compose.yaml -f compose.ghcr.yaml pull
-docker compose -f compose.yaml -f compose.ghcr.yaml up
+make dev-ghcr
 ```
 
-(Available after phase 3.)
+Pulls `ghcr.io/<GHCR_OWNER>/tasklog-api` and `.../tasklog-web` instead of building locally. Requires `GHCR_OWNER` in `.env` and both GHCR packages set to Public. Pin a specific build with `IMG_TAG=sha-<short>` (defaults to `latest`). Equivalent raw command:
+
+```bash
+docker compose -f compose.yaml -f compose.ghcr.yaml pull
+docker compose -f compose.yaml -f compose.ghcr.yaml up -d
+```
+
+CI builds and pushes both images on every push to `main`, tagged `latest` and `sha-<short>`.
 
 ### Stage B — observability pipeline on Compose
 
