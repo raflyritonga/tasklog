@@ -1,0 +1,8 @@
+services:
+  api:
+    image: ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env}/tasklog-api:${IMG_TAG:-dev}
+    build: !reset null
+
+  web:
+    image: ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env}/tasklog-web:${IMG_TAG:-dev}
+    build: !reset null

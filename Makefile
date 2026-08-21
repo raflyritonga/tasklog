@@ -27,7 +27,8 @@ dev:
 	docker compose up -d --build --wait
 
 dev-ghcr:
-	@echo "dev-ghcr: not implemented yet (Stage A, phase 3)"
+	docker compose -f compose.yaml -f compose.ghcr.yaml pull
+	docker compose -f compose.yaml -f compose.ghcr.yaml up -d --wait
 
 o11y-up:
 	@echo "o11y-up: not implemented yet (Stage B, phase 4)"
