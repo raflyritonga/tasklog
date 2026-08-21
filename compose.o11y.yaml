@@ -14,10 +14,11 @@ services:
       DT_API_TOKEN: ${DT_API_TOKEN:-}
       ELASTIC_APM_SECRET_TOKEN: ${ELASTIC_APM_SECRET_TOKEN:-}
     volumes:
-      - ./deploy/compose/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - ./deploy/otel-collector/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     ports:
       - "127.0.0.1:4317:4317"
       - "127.0.0.1:8889:8889"
+      - "127.0.0.1:8888:8888"
     depends_on:
       - tempo
 
@@ -28,16 +29,32 @@ services:
       DD_API_KEY: ${DD_API_KEY:-}
       ELASTIC_API_KEY: ${ELASTIC_API_KEY:-}
     volumes:
-      - ./deploy/compose/vector.toml:/etc/vector/vector.toml:ro
+      - ./deploy/vector/vector.toml:/etc/vector/vector.toml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       - loki
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.89.0-alpine
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.20.1
+    environment:
+      DATA_SOURCE_NAME: postgresql://monitor:${PG_MONITOR_PASSWORD:-monitor}@pg:5432/${POSTGRES_DB:-tasklog}?sslmode=disable
+    depends_on:
+      pg:
+        condition: service_healthy
 
   prometheus:
     image: prom/prometheus:v3.14.0
     command: ["--config.file=/etc/prometheus/prometheus.yaml"]
     volumes:
-      - ./deploy/compose/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./deploy/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
     ports:
       - "127.0.0.1:9090:9090"
 
@@ -45,7 +62,7 @@ services:
     image: grafana/loki:3.7.6
     command: ["-config.file=/etc/loki/loki.yaml"]
     volumes:
-      - ./deploy/compose/loki.yaml:/etc/loki/loki.yaml:ro
+      - ./deploy/loki/loki.yaml:/etc/loki/loki.yaml:ro
     ports:
       - "127.0.0.1:3100:3100"
 
@@ -53,7 +70,7 @@ services:
     image: grafana/tempo:3.0.3
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     volumes:
-      - ./deploy/compose/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - ./deploy/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
     ports:
       - "127.0.0.1:3200:3200"
 
@@ -62,5 +79,15 @@ services:
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      PG_MONITOR_PASSWORD: ${PG_MONITOR_PASSWORD:-monitor}
+    volumes:
+      - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./deploy/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./deploy/grafana/alert-rules.yaml:/etc/grafana/provisioning/alerting/rules.yaml:ro
+      - ./deploy/grafana/dashboard-golden.json:/var/lib/grafana/dashboards/golden.json:ro
     ports:
       - "127.0.0.1:3001:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo

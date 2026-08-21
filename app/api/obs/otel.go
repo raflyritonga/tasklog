@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -44,6 +45,9 @@ func Setup(ctx context.Context, endpoint, version string) (func(context.Context)
 		sdkmetric.WithResource(res),
 	)
 	otel.SetMeterProvider(meterProvider)
+	if err := runtime.Start(); err != nil {
+		return nil, err
+	}
 	return func(shutdownCtx context.Context) error {
 		return errors.Join(tracerProvider.Shutdown(shutdownCtx), meterProvider.Shutdown(shutdownCtx))
 	}, nil
