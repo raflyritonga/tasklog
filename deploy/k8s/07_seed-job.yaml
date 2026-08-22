@@ -5,9 +5,24 @@ metadata:
   namespace: tasklog
 spec:
   backoffLimit: 4
+  ttlSecondsAfterFinished: 600
   template:
     spec:
       restartPolicy: Never
+      initContainers:
+        - name: wait-pg
+          image: postgres:16.10-alpine
+          command:
+            - sh
+            - -c
+            - until pg_isready -h pg; do sleep 2; done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
       containers:
         - name: seed
           image: postgres:16.10-alpine

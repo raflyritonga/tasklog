@@ -18,24 +18,25 @@ import (
 
 func Setup(ctx context.Context, endpoint, version string) (func(context.Context) error, error) {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	if endpoint == "" {
-		return func(context.Context) error { return nil }, nil
-	}
 	res := resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceName("tasklog-api"),
 		semconv.ServiceVersion(version),
 		attribute.String("deployment.environment", "poc"),
 	)
-	traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithEndpointURL(endpoint))
-	if err != nil {
-		return nil, err
+	tracerOptions := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
+	if endpoint != "" {
+		traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithEndpointURL(endpoint))
+		if err != nil {
+			return nil, err
+		}
+		tracerOptions = append(tracerOptions, sdktrace.WithBatcher(traceExporter))
 	}
-	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(traceExporter),
-		sdktrace.WithResource(res),
-	)
+	tracerProvider := sdktrace.NewTracerProvider(tracerOptions...)
 	otel.SetTracerProvider(tracerProvider)
+	if endpoint == "" {
+		return tracerProvider.Shutdown, nil
+	}
 	metricExporter, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithEndpointURL(endpoint))
 	if err != nil {
 		return nil, err
