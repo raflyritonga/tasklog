@@ -27,7 +27,7 @@ singleBinary:
       cpu: 100m
       memory: 256Mi
     limits:
-      memory: 512Mi
+      memory: 1Gi
 
 read:
   replicas: 0
