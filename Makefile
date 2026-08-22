@@ -33,14 +33,21 @@ dev-ghcr:
 	docker compose -f compose.yaml -f compose.ghcr.yaml up -d --wait
 
 o11y-up:
-	bash deploy/render.sh
+	bash deploy/o11y/render.sh
 	docker compose -f compose.yaml -f compose.o11y.yaml up -d --build --wait
 
 up:
-	@echo "up: not implemented yet (Stage C, phase 6)"
+	ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
+	helm repo add traefik https://traefik.github.io/charts --force-update
+	KUBECONFIG=./kubeconfig helm upgrade --install traefik traefik/traefik --version 41.3.0 --namespace traefik --create-namespace -f deploy/k8s/00_traefik/values.yaml --wait --timeout 5m
 
 deploy:
-	@echo "deploy: not implemented yet (Stage C, phase 7)"
+	KUBECONFIG=./kubeconfig kubectl apply -f deploy/k8s/01_namespace.yaml
+	$(MAKE) secrets
+	KUBECONFIG=./kubeconfig kubectl -n tasklog create configmap pg-init --from-file=init.sql=deploy/postgres/init.sql --dry-run=client -o yaml | KUBECONFIG=./kubeconfig kubectl apply -f -
+	KUBECONFIG=./kubeconfig kubectl apply -f deploy/k8s/
+	KUBECONFIG=./kubeconfig kubectl -n tasklog rollout status deployment/api --timeout=180s
+	KUBECONFIG=./kubeconfig kubectl -n tasklog rollout status deployment/web --timeout=180s
 
 seed:
 	docker compose exec pg psql -U tasklog -d tasklog -c "select seed_tasks();"
@@ -61,7 +68,13 @@ dashboards:
 	@echo "dashboards: not implemented yet (Stage C, phase 10)"
 
 secrets:
-	@echo "secrets: not implemented yet (Stage C, phase 6)"
+	set -a; [ -f .env ] && . ./.env; set +a; \
+	KUBECONFIG=./kubeconfig kubectl -n tasklog create secret generic tasklog-db \
+		--from-literal=POSTGRES_USER=$${POSTGRES_USER:-tasklog} \
+		--from-literal=POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-tasklog} \
+		--from-literal=POSTGRES_DB=$${POSTGRES_DB:-tasklog} \
+		--from-literal=DATABASE_URL="postgres://$${POSTGRES_USER:-tasklog}:$${POSTGRES_PASSWORD:-tasklog}@pg:5432/$${POSTGRES_DB:-tasklog}?sslmode=disable" \
+		--dry-run=client -o yaml | KUBECONFIG=./kubeconfig kubectl apply -f -
 
 down:
 	docker compose -f compose.yaml -f compose.o11y.yaml down --remove-orphans

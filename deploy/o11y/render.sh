@@ -2,9 +2,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-if [ -f ../.env ]; then
+if [ -f ../../.env ]; then
   set -a
-  . ../.env
+  . ../../.env
   set +a
 fi
 
