@@ -79,11 +79,11 @@ Renders the collector and Vector configs from snippets (SaaS exporters appear on
 
 ```bash
 make up
-make secrets
 make deploy
+make deploy-o11y
 ```
 
-App at `http://tasklog-demo.orb.local`. (Available after phases 6–8.)
+Provisions the OrbStack VM + kind cluster + Traefik + metrics-server, deploys the app, then lifts the observability stack onto the cluster. App at `http://tasklog-demo.orb.local`, Grafana at `http://grafana.tasklog-demo.orb.local` — three provisioned dashboards (Application, Infrastructure, Data stores) plus the alert pack, from the same files as the compose stage.
 
 ## Make targets
 

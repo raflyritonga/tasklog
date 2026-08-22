@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-exporter
+  namespace: o11y
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-exporter
+  template:
+    metadata:
+      labels:
+        app: postgres-exporter
+    spec:
+      containers:
+        - name: postgres-exporter
+          image: prometheuscommunity/postgres-exporter:v0.20.1
+          env:
+            - name: PG_MONITOR_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-env
+                  key: PG_MONITOR_PASSWORD
+            - name: DATA_SOURCE_NAME
+              value: postgresql://monitor:$(PG_MONITOR_PASSWORD)@pg.tasklog.svc.cluster.local:5432/tasklog?sslmode=disable
+          ports:
+            - containerPort: 9187
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-exporter
+  namespace: o11y
+spec:
+  selector:
+    app: postgres-exporter
+  ports:
+    - port: 9187
+      targetPort: 9187
