@@ -16,6 +16,7 @@ import (
 	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	"go.opentelemetry.io/otel/metric/noop"
 
 	"github.com/raflyritonga/tasklog/app/api/demo"
 	"github.com/raflyritonga/tasklog/app/api/health"
@@ -60,7 +61,7 @@ func main() {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
-	e.Use(otelecho.Middleware("tasklog-api"))
+	e.Use(otelecho.Middleware("tasklog-api", otelecho.WithMeterProvider(noop.NewMeterProvider())))
 	e.Use(obs.Metrics())
 	e.Use(obs.RequestLogger(logger))
 	e.Use(demo.Middleware(levers))

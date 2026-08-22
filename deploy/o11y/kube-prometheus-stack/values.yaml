@@ -1,0 +1,79 @@
+fullnameOverride: kps
+
+defaultRules:
+  create: false
+
+alertmanager:
+  enabled: false
+
+grafana:
+  image:
+    tag: 13.0.7
+  envFromSecret: grafana-env
+  defaultDashboardsEnabled: false
+  readinessProbe:
+    httpGet:
+      path: /api/health
+      port: 3000
+    timeoutSeconds: 10
+    periodSeconds: 10
+    failureThreshold: 5
+  grafana.ini:
+    server:
+      root_url: http://grafana.tasklog-demo.orb.local
+    auth.anonymous:
+      enabled: true
+      org_role: Admin
+    plugins:
+      preinstall_disabled: true
+  sidecar:
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: false
+      label: grafana_datasource
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+    alerts:
+      enabled: true
+      label: grafana_alert
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+
+prometheus:
+  prometheusSpec:
+    retention: 6h
+    scrapeInterval: 15s
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+    additionalScrapeConfigs:
+      - job_name: otel-collector
+        static_configs:
+          - targets: ['otel-collector.o11y.svc:8889']
+      - job_name: otelcol-internal
+        static_configs:
+          - targets: ['otel-collector.o11y.svc:8888']
+      - job_name: postgres
+        static_configs:
+          - targets: ['postgres-exporter.o11y.svc:9187']
+      - job_name: redis
+        static_configs:
+          - targets: ['redis-exporter.o11y.svc:9121']
+      - job_name: vector
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names:
+                - o11y
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            action: keep
+            regex: vector

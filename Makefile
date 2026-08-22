@@ -6,7 +6,7 @@ K6_DURATION ?= 10m
 DEMO_MS ?= 800
 DEMO_RATE ?= 0.5
 
-.PHONY: help dev dev-ghcr o11y-up up deploy seed load demo-latency demo-errors demo-reset dashboards secrets down
+.PHONY: help dev dev-ghcr o11y-up up deploy deploy-o11y seed load demo-latency demo-errors demo-reset dashboards secrets down
 
 help:
 	@echo "Tasklog"
@@ -16,6 +16,7 @@ help:
 	@echo "  make o11y-up       observability pipeline on docker compose"
 	@echo "  make up            OrbStack VM + kind cluster + ingress (ansible)"
 	@echo "  make deploy        app + pipeline onto the kind cluster"
+	@echo "  make deploy-o11y   observability stack onto the kind cluster"
 	@echo "  make seed          seed database with sample tasks"
 	@echo "  make load          k6 load script against the app"
 	@echo "  make demo-latency  inject latency into /api/tasks*"
@@ -40,14 +41,34 @@ up:
 	ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
 	helm repo add traefik https://traefik.github.io/charts --force-update
 	KUBECONFIG=./kubeconfig helm upgrade --install traefik traefik/traefik --version 41.3.0 --namespace traefik --create-namespace -f deploy/k8s/00_traefik/values.yaml --wait --timeout 5m
+	helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/ --force-update
+	KUBECONFIG=./kubeconfig helm upgrade --install metrics-server metrics-server/metrics-server --version 3.14.0 --namespace kube-system --set 'args={--kubelet-insecure-tls,--kubelet-preferred-address-types=InternalIP}' --wait --timeout 5m
 
 deploy:
 	KUBECONFIG=./kubeconfig kubectl apply -f deploy/k8s/01_namespace.yaml
 	$(MAKE) secrets
 	KUBECONFIG=./kubeconfig kubectl -n tasklog create configmap pg-init --from-file=init.sql=deploy/postgres/init.sql --dry-run=client -o yaml | KUBECONFIG=./kubeconfig kubectl apply -f -
+	KUBECONFIG=./kubeconfig kubectl -n tasklog delete job seed --ignore-not-found
 	KUBECONFIG=./kubeconfig kubectl apply -f deploy/k8s/
 	KUBECONFIG=./kubeconfig kubectl -n tasklog rollout status deployment/api --timeout=180s
 	KUBECONFIG=./kubeconfig kubectl -n tasklog rollout status deployment/web --timeout=180s
+
+deploy-o11y:
+	KUBECONFIG=./kubeconfig kubectl apply -f deploy/o11y/k8s/01_namespace.yaml
+	set -a; [ -f .env ] && . ./.env; set +a; \
+	KUBECONFIG=./kubeconfig kubectl -n o11y create secret generic grafana-env --from-literal=PG_MONITOR_PASSWORD=$${PG_MONITOR_PASSWORD:-monitor} --dry-run=client -o yaml | KUBECONFIG=./kubeconfig kubectl apply -f -
+	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
+	helm repo add grafana https://grafana.github.io/helm-charts --force-update
+	KUBECONFIG=./kubeconfig helm upgrade --install kps prometheus-community/kube-prometheus-stack --version 88.5.3 --namespace o11y -f deploy/o11y/kube-prometheus-stack/values.yaml --wait --timeout 10m
+	KUBECONFIG=./kubeconfig helm upgrade --install loki grafana/loki --version 7.3.0 --namespace o11y -f deploy/o11y/loki/values-k8s.yaml --wait --timeout 10m
+	KUBECONFIG=./kubeconfig helm upgrade --install tempo grafana/tempo --version 1.24.4 --namespace o11y -f deploy/o11y/tempo/values-k8s.yaml --wait --timeout 5m
+	KUBECONFIG=./kubeconfig kubectl -n o11y create configmap grafana-datasources --from-file=datasources.yaml=deploy/o11y/grafana/provisioning-k8s/datasources.yaml --dry-run=client -o yaml | KUBECONFIG=./kubeconfig kubectl label --local -f - grafana_datasource=1 -o yaml | KUBECONFIG=./kubeconfig kubectl apply -f -
+	KUBECONFIG=./kubeconfig kubectl -n o11y create configmap grafana-dashboards --from-file=app.json=deploy/o11y/grafana/provisioning-k8s/dashboard-app.json --from-file=infra.json=deploy/o11y/grafana/provisioning-k8s/dashboard-infra.json --from-file=data.json=deploy/o11y/grafana/provisioning-k8s/dashboard-data.json --dry-run=client -o yaml | KUBECONFIG=./kubeconfig kubectl label --local -f - grafana_dashboard=1 -o yaml | KUBECONFIG=./kubeconfig kubectl apply -f -
+	KUBECONFIG=./kubeconfig kubectl -n o11y delete configmap grafana-dashboard-golden --ignore-not-found
+	KUBECONFIG=./kubeconfig kubectl -n o11y create configmap grafana-alerts --from-file=alerts.yaml=deploy/o11y/grafana/provisioning-k8s/alert-rules.yaml --dry-run=client -o yaml | KUBECONFIG=./kubeconfig kubectl label --local -f - grafana_alert=1 -o yaml | KUBECONFIG=./kubeconfig kubectl apply -f -
+	KUBECONFIG=./kubeconfig kubectl apply -f deploy/o11y/k8s/
+	KUBECONFIG=./kubeconfig kubectl -n o11y rollout status deployment/otel-collector --timeout=180s
+	KUBECONFIG=./kubeconfig kubectl -n o11y rollout status daemonset/vector --timeout=180s
 
 seed:
 	docker compose exec pg psql -U tasklog -d tasklog -c "select seed_tasks();"

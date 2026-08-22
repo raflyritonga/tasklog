@@ -25,6 +25,8 @@ spec:
                   key: DATABASE_URL
             - name: REDIS_ADDR
               value: redis:6379
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.o11y.svc.cluster.local:4317
           ports:
             - containerPort: 8080
           livenessProbe:

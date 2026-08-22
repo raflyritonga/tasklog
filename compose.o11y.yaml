@@ -83,8 +83,10 @@ services:
     volumes:
       - ./deploy/o11y/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./deploy/o11y/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./deploy/o11y/grafana/alert-rules.yaml:/etc/grafana/provisioning/alerting/rules.yaml:ro
-      - ./deploy/o11y/grafana/dashboard-golden.json:/var/lib/grafana/dashboards/golden.json:ro
+      - ./deploy/o11y/grafana/provisioning-k8s/alert-rules.yaml:/etc/grafana/provisioning/alerting/rules.yaml:ro
+      - ./deploy/o11y/grafana/provisioning-k8s/dashboard-app.json:/var/lib/grafana/dashboards/app.json:ro
+      - ./deploy/o11y/grafana/provisioning-k8s/dashboard-infra.json:/var/lib/grafana/dashboards/infra.json:ro
+      - ./deploy/o11y/grafana/provisioning-k8s/dashboard-data.json:/var/lib/grafana/dashboards/data.json:ro
     ports:
       - "127.0.0.1:3001:3000"
     depends_on:
