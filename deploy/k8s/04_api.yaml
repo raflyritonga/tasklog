@@ -16,6 +16,7 @@ spec:
       containers:
         - name: api
           image: ghcr.io/raflyritonga/tasklog-api:dev
+          imagePullPolicy: Always
           env:
             - name: DATABASE_URL
               valueFrom:
