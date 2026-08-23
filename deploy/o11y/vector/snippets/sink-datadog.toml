@@ -1,5 +1,29 @@
+
+[transforms.dd_filter]
+type = "filter"
+inputs = ["parsed"]
+condition = '''
+svc = string(.service) ?? ""
+route = string(.route) ?? ""
+app = includes(["tasklog-api", "api", "web", "pg", "postgres", "redis"], svc)
+app && !includes(["/healthz", "/readyz"], route)
+'''
+
+[transforms.dd_prep]
+type = "remap"
+inputs = ["dd_filter"]
+source = '''
+.ddsource = "go"
+.ddtags = "env:dev,project:tasklog"
+.status = .level
+msg = string(.msg) ?? ""
+if msg != "" {
+  .message = msg
+}
+'''
+
 [sinks.datadog]
 type = "datadog_logs"
-inputs = ["parsed"]
-default_api_key = "${DD_API_KEY}"
+inputs = ["dd_prep"]
+default_api_key = "__DD_API_KEY__"
 site = "__DD_SITE_FULL__"

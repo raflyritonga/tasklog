@@ -1,3 +1,4 @@
+import type { NuxtApp } from 'nuxt/app'
 import type { Router } from 'vue-router'
 
 type PublicConfig = {
@@ -18,9 +19,10 @@ export default defineNuxtPlugin({
   setup() {
     const config = useRuntimeConfig().public as PublicConfig
     const router = useRouter()
+    const nuxtApp = useNuxtApp()
     switch (config.rumProvider) {
       case 'datadog':
-        initDatadog(config, router)
+        initDatadog(config, router, nuxtApp)
         break
       case 'dynatrace':
         initDynatrace(config)
@@ -41,7 +43,7 @@ function datadogSite(site: string) {
   return site.includes('.') ? site : `${site}.datadoghq.com`
 }
 
-async function initDatadog(config: PublicConfig, router: Router) {
+async function initDatadog(config: PublicConfig, router: Router, nuxtApp: NuxtApp) {
   if (!config.ddRumAppId || !config.ddRumClientToken) {
     return
   }
@@ -61,7 +63,7 @@ async function initDatadog(config: PublicConfig, router: Router) {
     trackLongTasks: true,
     defaultPrivacyLevel: 'mask-user-input',
     allowedTracingUrls: tracingUrls,
-    plugins: [nuxtRumPlugin({ router })]
+    plugins: [nuxtRumPlugin({ router, nuxtApp })]
   })
 }
 

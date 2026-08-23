@@ -33,7 +33,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	ctx := context.Background()
-	otelShutdown, err := obs.Setup(ctx, cfg.otlpEndpoint, version)
+	otelShutdown, err := obs.Setup(ctx, cfg.otlpEndpoint, version, cfg.deployEnv)
 	if err != nil {
 		logger.Error("otel setup failed", "err", err.Error())
 		os.Exit(1)
@@ -61,7 +61,13 @@ func main() {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
-	e.Use(otelecho.Middleware("tasklog-api", otelecho.WithMeterProvider(noop.NewMeterProvider())))
+	e.Use(otelecho.Middleware("tasklog-api",
+		otelecho.WithMeterProvider(noop.NewMeterProvider()),
+		otelecho.WithSkipper(func(c echo.Context) bool {
+			path := c.Request().URL.Path
+			return path == "/healthz" || path == "/readyz"
+		}),
+	))
 	e.Use(obs.Metrics())
 	e.Use(obs.RequestLogger(logger))
 	e.Use(demo.Middleware(levers))

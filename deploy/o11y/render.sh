@@ -29,15 +29,18 @@ render() {
 
   trace_exporters="otlp/tempo"
   metric_exporters="prometheus"
+  metric_receivers="otlp"
 
   cp "otel-collector/snippets/base-$stage.yaml" "$collector"
   cp "vector/snippets/base-$stage.toml" "$vectorconf"
 
   if [ -n "${DD_API_KEY:-}" ]; then
     cat otel-collector/snippets/exporter-datadog.yaml >> "$collector"
+    cat otel-collector/snippets/connector-datadog.yaml >> "$collector"
     cat vector/snippets/sink-datadog.toml >> "$vectorconf"
-    trace_exporters="$trace_exporters, datadog"
+    trace_exporters="$trace_exporters, datadog, datadog/connector"
     metric_exporters="$metric_exporters, datadog"
+    metric_receivers="$metric_receivers, datadog/connector"
   fi
 
   if [ -n "${DT_TENANT_URL:-}" ] && [ -n "${DT_API_TOKEN:-}" ]; then
@@ -73,7 +76,7 @@ service:
       processors: [$traces_processors]
       exporters: [$trace_exporters]
     metrics:
-      receivers: [otlp]
+      receivers: [$metric_receivers]
       processors: [batch]
       exporters: [$metric_exporters]
 EOF
@@ -87,6 +90,8 @@ EOF
   sed -i '' \
     -e "s|__DD_SITE_FULL__|$dd_site_full|g" \
     -e "s|__ELASTIC_ES_ENDPOINT__|${ELASTIC_ES_ENDPOINT:-}|g" \
+    -e "s|__DD_API_KEY__|${DD_API_KEY:-}|g" \
+    -e "s|__ELASTIC_API_KEY__|${ELASTIC_API_KEY:-}|g" \
     "$vectorconf"
 }
 

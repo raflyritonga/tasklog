@@ -3,6 +3,7 @@ package obs
 import (
 	"log/slog"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -46,6 +47,7 @@ func RequestLogger(logger *slog.Logger) echo.MiddlewareFunc {
 				"duration_ms", float64(time.Since(start).Microseconds()) / 1000,
 				"trace_id", traceID,
 				"span_id", spanID,
+				slog.Group("dd", "trace_id", datadogID(traceID), "span_id", datadogID(spanID)),
 			}
 			if err != nil {
 				attrs = append(attrs, "err", err.Error())
@@ -59,4 +61,15 @@ func RequestLogger(logger *slog.Logger) echo.MiddlewareFunc {
 			return nil
 		}
 	}
+}
+
+func datadogID(id string) string {
+	if len(id) < 16 {
+		return ""
+	}
+	value, err := strconv.ParseUint(id[len(id)-16:], 16, 64)
+	if err != nil {
+		return ""
+	}
+	return strconv.FormatUint(value, 10)
 }

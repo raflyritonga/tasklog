@@ -20,10 +20,18 @@ datadog:
   kubeStateMetricsEnabled: false
   orchestratorExplorer:
     enabled: true
+  databaseMonitoring:
+    enabled: true
 
 agents:
   containers:
     agent:
+      env:
+        - name: PG_MONITOR_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-env
+              key: PG_MONITOR_PASSWORD
       resources:
         requests:
           cpu: 50m

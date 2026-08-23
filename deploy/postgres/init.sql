@@ -42,3 +42,27 @@ grant pg_monitor to monitor;
 grant connect on database tasklog to monitor;
 grant usage on schema public to monitor;
 grant select on all tables in schema public to monitor;
+
+create schema if not exists datadog;
+grant usage on schema datadog to monitor;
+grant usage on schema public to monitor;
+
+create or replace function datadog.explain_statement(l_query text, out explain json)
+returns setof json
+language plpgsql
+returns null on null input
+security definer
+as $$
+declare
+    curs refcursor;
+    plan json;
+begin
+    open curs for execute pg_catalog.concat('explain (format json) ', l_query);
+    fetch curs into plan;
+    close curs;
+    return query select plan;
+end;
+$$;
+
+alter function datadog.explain_statement(text) owner to tasklog;
+grant execute on function datadog.explain_statement(text) to monitor;
