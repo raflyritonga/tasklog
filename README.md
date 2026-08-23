@@ -47,15 +47,15 @@ Missing SaaS variables are fine: any exporter or sink without credentials is sim
 ### Stage A — app on Docker Compose
 
 ```bash
-make dev
+make docker-app
 ```
 
-Builds and starts postgres, redis, api, and web. App at `http://localhost:3000` — the database is seeded with 50 tasks on first boot. `make down` stops everything.
+Builds and starts postgres, redis, api, and web. App at `http://localhost:3000` — the database is seeded with 50 tasks on first boot. `make docker-down` stops everything.
 
 ### Stage A — run from public GHCR images
 
 ```bash
-make dev-ghcr
+make docker-app-ghcr
 ```
 
 Pulls `ghcr.io/<GHCR_OWNER>/tasklog-api` and `.../tasklog-web` instead of building locally. Requires `GHCR_OWNER` in `.env` and both GHCR packages set to Public. Pin a specific build with `IMG_TAG=sha-<short>` (defaults to `dev`). Equivalent raw command:
@@ -67,20 +67,29 @@ docker compose -f compose.yaml -f compose.ghcr.yaml up -d
 
 CI builds and pushes both images on every push to `main`, tagged `dev` and `sha-<short>`. `compose.yaml` also names the GHCR images directly (with local `build:` as fallback), so a plain `docker compose up` pulls the published images once the packages are public.
 
-### Stage B — observability pipeline on Compose
+### Stage B — observability on Compose
+
+Compose files are split by what they are: `compose.yaml` (app), `compose.telemetry.yaml` (the vendor-neutral layer: OTel Collector + Vector), `compose.grafana.yaml` (Grafana, Prometheus, Loki, Tempo, exporters), `compose.datadog.yaml` (Datadog agent).
 
 ```bash
-make o11y-up
+make docker-grafana
 ```
 
-Renders the collector and Vector configs from snippets (SaaS exporters appear only for credentials present in `.env` — with an empty `.env` you get the pure Grafana stack), then starts the app plus otel-collector, Vector, Grafana (`http://localhost:3001`), Prometheus (`:9090`), Loki (`:3100`), and Tempo (`:3200`).
+Self-hosted only: app + telemetry layer + Grafana stack. Grafana at `http://localhost:3001`, Prometheus `:9090`, Loki `:3100`, Tempo `:3200`.
+
+```bash
+make docker-o11y
+```
+
+Everything: the same baseline plus every SaaS platform whose credentials are in `.env`. Vendor exporters and sinks are rendered only for credentials that exist, so an empty `.env` yields the pure Grafana path. `make docker-datadog` adds just the Datadog agent on top of the baseline.
 
 ### Stage C — Kubernetes
 
 ```bash
-make up
-make deploy
-make deploy-o11y
+make k8s-cluster
+make k8s-app
+make k8s-o11y
+make k8s-datadog
 ```
 
 Provisions the OrbStack VM + kind cluster + Traefik + metrics-server, deploys the app, then lifts the observability stack onto the cluster. App at `http://tasklog-demo.orb.local`, Grafana at `http://grafana.tasklog-demo.orb.local` — three provisioned dashboards (Application, Infrastructure, Data stores) plus the alert pack, from the same files as the compose stage.
@@ -89,19 +98,25 @@ Provisions the OrbStack VM + kind cluster + Traefik + metrics-server, deploys th
 
 | Target | What it does |
 |---|---|
-| `dev` | app stack on Docker Compose, local builds |
-| `dev-ghcr` | app stack on Docker Compose, GHCR images |
-| `o11y-up` | observability pipeline on Compose |
-| `up` | OrbStack VM + kind cluster + ingress via Ansible |
-| `deploy` | app + pipeline onto the kind cluster |
-| `seed` | seed the database with sample tasks |
+| **Docker Compose** | |
+| `docker-app` | app only: pg, redis, api, web (local builds) |
+| `docker-app-ghcr` | app only, from published GHCR images |
+| `docker-grafana` | app + telemetry layer + Grafana stack |
+| `docker-datadog` | same, plus the Datadog agent |
+| `docker-o11y` | same, plus every configured platform |
+| `docker-seed` | reseed the compose database |
+| `docker-down` | stop and remove the compose stack |
+| **Kubernetes** | |
+| `k8s-cluster` | provision VM + kind + Traefik + metrics-server (Ansible) |
+| `k8s-app` | app manifests, secrets, seed job |
+| `k8s-o11y` | telemetry layer + Grafana stack on the cluster |
+| `k8s-datadog` | Datadog agent + database monitoring |
+| `k8s-secrets` | render k8s Secrets from `.env` |
+| `k8s-down` | delete the `tasklog` and `o11y` namespaces |
+| **Either target** | set `API_URL` / `LOAD_URL` |
 | `load` | k6 load script |
-| `demo-latency` | inject latency into `/api/tasks*` |
-| `demo-errors` | inject 500 errors into `/api/tasks*` |
-| `demo-reset` | clear both demo levers |
+| `demo-latency` / `demo-errors` / `demo-reset` | failure-injection levers |
 | `dashboards` | push dashboards to the SaaS platforms |
-| `secrets` | render k8s Secrets from `.env` |
-| `down` | stop and remove everything |
 
 ## Design notes
 
