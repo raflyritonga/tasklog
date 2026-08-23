@@ -47,23 +47,19 @@ Missing SaaS variables are fine: any exporter or sink without credentials is sim
 ### Stage A — app on Docker Compose
 
 ```bash
-make docker-app
+docker compose up -d --build --wait
 ```
 
-Builds and starts postgres, redis, api, and web. App at `http://localhost:3000` — the database is seeded with 50 tasks on first boot. `make docker-down` stops everything.
+Builds and starts postgres, redis, api, and web. App at `http://localhost:3000` — the database is seeded with 50 tasks on first boot.
 
 ### Stage A — run from public GHCR images
-
-```bash
-make docker-app-ghcr
-```
-
-Pulls `ghcr.io/<GHCR_OWNER>/tasklog-api` and `.../tasklog-web` instead of building locally. Requires `GHCR_OWNER` in `.env` and both GHCR packages set to Public. Pin a specific build with `IMG_TAG=sha-<short>` (defaults to `dev`). Equivalent raw command:
 
 ```bash
 docker compose -f compose.yaml -f compose.ghcr.yaml pull
 docker compose -f compose.yaml -f compose.ghcr.yaml up -d
 ```
+
+Pulls `ghcr.io/<GHCR_OWNER>/tasklog-api` and `.../tasklog-web` instead of building locally. Requires `GHCR_OWNER` in `.env` and both GHCR packages set to Public. Pin a specific build with `IMG_TAG=sha-<short>` (defaults to `dev`).
 
 CI builds and pushes both images on every push to `main`, tagged `dev` and `sha-<short>`. `compose.yaml` also names the GHCR images directly (with local `build:` as fallback), so a plain `docker compose up` pulls the published images once the packages are public.
 
@@ -81,7 +77,7 @@ Self-hosted only: app + telemetry layer + Grafana stack. Grafana at `http://loca
 make docker-o11y
 ```
 
-Everything: the same baseline plus every SaaS platform whose credentials are in `.env`. Vendor exporters and sinks are rendered only for credentials that exist, so an empty `.env` yields the pure Grafana path. `make docker-datadog` adds just the Datadog agent on top of the baseline.
+Everything: the same baseline plus every SaaS platform whose credentials are in `.env`. Vendor exporters and sinks are rendered only for credentials that exist, so an empty `.env` yields the pure Grafana path.
 
 ### Stage C — Kubernetes
 
@@ -89,6 +85,7 @@ Everything: the same baseline plus every SaaS platform whose credentials are in 
 make k8s-cluster
 make k8s-app
 make k8s-o11y
+make k8s-elastic
 make k8s-datadog
 ```
 
@@ -99,24 +96,31 @@ Provisions the OrbStack VM + kind cluster + Traefik + metrics-server, deploys th
 | Target | What it does |
 |---|---|
 | **Docker Compose** | |
-| `docker-app` | app only: pg, redis, api, web (local builds) |
-| `docker-app-ghcr` | app only, from published GHCR images |
-| `docker-grafana` | app + telemetry layer + Grafana stack |
-| `docker-datadog` | same, plus the Datadog agent |
-| `docker-o11y` | same, plus every configured platform |
-| `docker-seed` | reseed the compose database |
+| `docker-grafana` | app + telemetry layer + Grafana stack (works with an empty `.env`) |
+| `docker-o11y` | app + telemetry layer + every configured platform |
 | `docker-down` | stop and remove the compose stack |
-| **Kubernetes** | |
-| `k8s-cluster` | provision VM + kind + Traefik + metrics-server (Ansible) |
-| `k8s-app` | app manifests, secrets, seed job |
-| `k8s-o11y` | telemetry layer + Grafana stack on the cluster |
+| **Kubernetes** (in this order) | |
+| `k8s-cluster` | VM + kind + Traefik + metrics-server (Ansible) |
+| `k8s-app` | app: secrets, pg, redis, api, web, ingress, seed |
+| `k8s-o11y` | telemetry layer + Grafana stack (kube-prometheus, Loki, Tempo) |
+| `k8s-elastic` | self-hosted Elasticsearch + Kibana (ECK operator) |
 | `k8s-datadog` | Datadog agent + database monitoring |
-| `k8s-secrets` | render k8s Secrets from `.env` |
 | `k8s-down` | delete the `tasklog` and `o11y` namespaces |
-| **Either target** | set `API_URL` / `LOAD_URL` |
+| `k8s-reset` | destroy the kind cluster and rebuild it empty |
+| **Demo** (set `API_URL` / `LOAD_URL`) | |
 | `load` | k6 load script |
 | `demo-latency` / `demo-errors` / `demo-reset` | failure-injection levers |
-| `dashboards` | push dashboards to the SaaS platforms |
+
+Not in `make help` because they are called by the targets above, but usable directly:
+`k8s-secrets` (render Secrets from `.env`) and `k8s-elastic-wire` (re-point Vector at
+Elasticsearch after it is up).
+
+For the app alone on Compose, or straight from GHCR images:
+
+```bash
+docker compose up -d --build --wait
+docker compose -f compose.yaml -f compose.ghcr.yaml pull && docker compose -f compose.yaml -f compose.ghcr.yaml up -d
+```
 
 ## Design notes
 

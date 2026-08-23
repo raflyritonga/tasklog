@@ -1,13 +1,16 @@
+
 [sinks.elastic]
 type = "elasticsearch"
 inputs = ["parsed"]
 endpoints = ["__ELASTIC_ES_ENDPOINT__"]
-api_version = "v8"
+api_version = "auto"
 mode = "bulk"
 
 [sinks.elastic.bulk]
 action = "create"
 index = "logs-tasklog-default"
 
-[sinks.elastic.request.headers]
-Authorization = "ApiKey __ELASTIC_API_KEY__"
+[sinks.elastic.auth]
+strategy = "basic"
+user = "__ELASTIC_ES_USER__"
+password = "__ELASTIC_ES_PASSWORD__"
