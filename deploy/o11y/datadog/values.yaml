@@ -1,0 +1,52 @@
+datadog:
+  clusterName: tasklog-kind
+  site: __DD_SITE_FULL__
+  apiKeyExistingSecret: o11y-vendors
+  tags:
+    - env:poc
+    - project:tasklog
+  kubelet:
+    tlsVerify: false
+  logs:
+    enabled: false
+  apm:
+    portEnabled: false
+    socketEnabled: false
+  processAgent:
+    enabled: true
+    processCollection: false
+  kubeStateMetricsCore:
+    enabled: true
+  kubeStateMetricsEnabled: false
+  orchestratorExplorer:
+    enabled: true
+
+agents:
+  containers:
+    agent:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 192Mi
+        limits:
+          memory: 512Mi
+    processAgent:
+      resources:
+        requests:
+          cpu: 25m
+          memory: 96Mi
+        limits:
+          memory: 256Mi
+
+clusterAgent:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 192Mi
+    limits:
+      memory: 512Mi
+
+clusterChecksRunner:
+  enabled: false

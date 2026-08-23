@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@datadog/browser-rum": "7.9.0",
+    "@datadog/browser-rum-nuxt": "7.9.0",
     "@elastic/apm-rum": "5.17.5",
     "nuxt": "3.21.11"
   },
