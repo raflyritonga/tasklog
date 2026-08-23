@@ -1,11 +1,14 @@
 package task
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Handler struct {
@@ -25,11 +28,17 @@ func (h *Handler) Register(g *echo.Group) {
 }
 
 func (h *Handler) list(c echo.Context) error {
-	tasks, err := h.store.List(c.Request().Context())
+	ctx := c.Request().Context()
+	tasks, err := h.store.List(ctx)
 	if err != nil {
 		return err
 	}
+	tag(ctx, attribute.String("task.operation", "list"), attribute.Int("task.count", len(tasks)))
 	return c.JSON(http.StatusOK, tasks)
+}
+
+func tag(ctx context.Context, attrs ...attribute.KeyValue) {
+	trace.SpanFromContext(ctx).SetAttributes(attrs...)
 }
 
 func (h *Handler) get(c echo.Context) error {
@@ -55,10 +64,12 @@ func (h *Handler) create(c echo.Context) error {
 	if msg := in.Validate(); msg != "" {
 		return badRequest(c, msg)
 	}
-	t, err := h.store.Create(c.Request().Context(), in)
+	ctx := c.Request().Context()
+	t, err := h.store.Create(ctx, in)
 	if err != nil {
 		return err
 	}
+	tag(ctx, attribute.String("task.operation", "create"), attribute.String("task.status", t.Status))
 	return c.JSON(http.StatusCreated, t)
 }
 
@@ -74,13 +85,15 @@ func (h *Handler) update(c echo.Context) error {
 	if msg := in.Validate(); msg != "" {
 		return badRequest(c, msg)
 	}
-	t, err := h.store.Update(c.Request().Context(), id.String(), in)
+	ctx := c.Request().Context()
+	t, err := h.store.Update(ctx, id.String(), in)
 	if errors.Is(err, ErrNotFound) {
 		return notFound(c)
 	}
 	if err != nil {
 		return err
 	}
+	tag(ctx, attribute.String("task.operation", "update"), attribute.String("task.status", t.Status))
 	return c.JSON(http.StatusOK, t)
 }
 
