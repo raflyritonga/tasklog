@@ -12,7 +12,7 @@ O11Y_STACK = -f compose.yaml -f compose.telemetry.yaml -f compose.grafana.yaml -
 
 DD_SITE_SHELL = case "$${DD_SITE:-}" in "") DD_SITE_FULL=datadoghq.com ;; *.*) DD_SITE_FULL=$${DD_SITE} ;; *) DD_SITE_FULL=$${DD_SITE}.datadoghq.com ;; esac; export DD_SITE_FULL
 
-.PHONY: help docker-grafana docker-o11y docker-down k8s-cluster k8s-app k8s-o11y k8s-elastic k8s-datadog k8s-down k8s-reset k8s-secrets k8s-elastic-wire load demo-latency demo-errors demo-reset
+.PHONY: help k8s-elastic-bootstrap docker-grafana docker-o11y docker-down k8s-cluster k8s-app k8s-o11y k8s-elastic k8s-datadog k8s-down k8s-reset k8s-secrets k8s-elastic-wire load demo-latency demo-errors demo-reset
 
 help:
 	@echo "Tasklog"
@@ -27,6 +27,7 @@ help:
 	@echo "  k8s-app          app: secrets, pg, redis, api, web, ingress, seed"
 	@echo "  k8s-o11y         telemetry + grafana stack (kube-prometheus, loki, tempo)"
 	@echo "  k8s-elastic      self-hosted elasticsearch + kibana (ECK)"
+	@echo "  k8s-elastic-bootstrap  geoip ingest pipeline + kibana dashboard and data view"
 	@echo "  k8s-datadog      datadog agent + database monitoring"
 	@echo "  k8s-down         delete the tasklog and o11y namespaces"
 	@echo "  k8s-reset        destroy the kind cluster and rebuild it empty"
@@ -114,6 +115,16 @@ k8s-elastic-wire:
 	$(KC) kubectl -n o11y create secret generic vector-config --from-file=vector.toml=deploy/o11y/vector/vector-k8s.toml --dry-run=client -o yaml | $(KC) kubectl apply -f -
 	$(KC) kubectl -n o11y rollout restart daemonset/vector
 	$(KC) kubectl -n o11y rollout status daemonset/vector --timeout=180s
+
+k8s-elastic-bootstrap:
+	ESPW=$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}'); \
+	$(KC) kubectl -n o11y exec -i statefulset/elasticsearch-es-default -c elasticsearch -- \
+		curl -sS -u "elastic:$$ESPW" -X PUT "http://localhost:9200/_ingest/pipeline/tasklog-logs" \
+		-H 'Content-Type: application/json' --data-binary @- < deploy/o11y/elastic/ingest-pipeline.json; \
+	echo; \
+	curl -sS -u "elastic:$$ESPW" -X POST "http://kibana.tasklog-demo.orb.local/api/saved_objects/_import?overwrite=true" \
+		-H 'kbn-xsrf: true' -F file=@deploy/o11y/elastic/kibana-objects.ndjson; \
+	echo
 
 k8s-datadog:
 	set -a; [ -f .env ] && . ./.env; set +a; \
