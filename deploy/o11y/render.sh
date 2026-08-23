@@ -19,7 +19,7 @@ vendors=""
 [ -n "${DD_API_KEY:-}" ] && vendors="$vendors datadog"
 [ -n "${DT_TENANT_URL:-}" ] && [ -n "${DT_API_TOKEN:-}" ] && vendors="$vendors dynatrace"
 [ -n "${ELASTIC_APM_ENDPOINT:-}" ] && vendors="$vendors elastic-apm"
-[ -n "${ELASTIC_ES_ENDPOINT:-}" ] && [ -n "${ELASTIC_API_KEY:-}" ] && vendors="$vendors elastic-logs"
+{ [ -n "${ELASTIC_ES_ENDPOINT:-}" ] || [ -n "${ELASTIC_ES_ENDPOINT_K8S:-}" ]; } && [ -n "${ELASTIC_ES_PASSWORD:-}" ] && vendors="$vendors elastic-logs"
 
 render() {
   stage="$1"
@@ -55,7 +55,11 @@ render() {
     metric_exporters="$metric_exporters, otlphttp/elastic"
   fi
 
-  if [ -n "${ELASTIC_ES_ENDPOINT:-}" ] && [ -n "${ELASTIC_API_KEY:-}" ]; then
+  es_endpoint="${ELASTIC_ES_ENDPOINT:-}"
+  if [ "$stage" = "k8s" ] && [ -n "${ELASTIC_ES_ENDPOINT_K8S:-}" ]; then
+    es_endpoint="$ELASTIC_ES_ENDPOINT_K8S"
+  fi
+  if [ -n "$es_endpoint" ] && [ -n "${ELASTIC_ES_PASSWORD:-}" ]; then
     cat vector/snippets/sink-elastic.toml >> "$vectorconf"
   fi
 
@@ -89,9 +93,10 @@ EOF
 
   sed -i '' \
     -e "s|__DD_SITE_FULL__|$dd_site_full|g" \
-    -e "s|__ELASTIC_ES_ENDPOINT__|${ELASTIC_ES_ENDPOINT:-}|g" \
+    -e "s|__ELASTIC_ES_ENDPOINT__|$es_endpoint|g" \
     -e "s|__DD_API_KEY__|${DD_API_KEY:-}|g" \
-    -e "s|__ELASTIC_API_KEY__|${ELASTIC_API_KEY:-}|g" \
+    -e "s|__ELASTIC_ES_USER__|${ELASTIC_ES_USER:-elastic}|g" \
+    -e "s|__ELASTIC_ES_PASSWORD__|${ELASTIC_ES_PASSWORD:-}|g" \
     "$vectorconf"
 }
 

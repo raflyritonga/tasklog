@@ -25,6 +25,7 @@
         content: |
           fs.inotify.max_user_instances=1024
           fs.inotify.max_user_watches=1048576
+          vm.max_map_count=262144
       register: sysctl_conf
 
     - name: apply sysctl
