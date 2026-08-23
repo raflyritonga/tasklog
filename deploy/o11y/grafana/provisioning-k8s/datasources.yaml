@@ -47,3 +47,17 @@ datasources:
       database: tasklog
       sslmode: disable
       postgresVersion: 1600
+
+  - name: Elasticsearch
+    uid: elastic
+    type: elasticsearch
+    access: proxy
+    url: http://elasticsearch-es-http.o11y.svc:9200
+    basicAuth: true
+    basicAuthUser: elastic
+    secureJsonData:
+      basicAuthPassword: $ELASTIC_ES_PASSWORD
+    jsonData:
+      index: logs-tasklog-default
+      timeField: '@timestamp'
+      maxConcurrentShardRequests: 5

@@ -392,6 +392,123 @@
           "legendFormat": "{{go_memory_type}}"
         }
       ]
+    },
+    {
+      "id": 106,
+      "type": "row",
+      "title": "Cross-source (Elasticsearch)",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      }
+    },
+    {
+      "id": 50,
+      "type": "timeseries",
+      "title": "Log volume from Elasticsearch (cross-source)",
+      "description": "Same dashboard, different database: this panel queries self-hosted Elasticsearch while its neighbours query Prometheus",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "elastic"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "service.name:tasklog-api",
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "2",
+              "type": "date_histogram",
+              "field": "@timestamp",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": "0"
+              }
+            }
+          ],
+          "timeField": "@timestamp",
+          "alias": "log lines"
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "type": "timeseries",
+      "title": "Error logs by country from Elasticsearch (geo-enriched)",
+      "description": "client_ip enriched by an Elasticsearch ingest pipeline; Prometheus cannot answer this question",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "elastic"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "log.level:error",
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "3",
+              "type": "terms",
+              "field": "client.geo.country_iso_code",
+              "settings": {
+                "size": "5",
+                "order": "desc",
+                "orderBy": "_count",
+                "min_doc_count": "1"
+              }
+            },
+            {
+              "id": "2",
+              "type": "date_histogram",
+              "field": "@timestamp",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": "0"
+              }
+            }
+          ],
+          "timeField": "@timestamp"
+        }
+      ]
     }
   ],
   "annotations": {

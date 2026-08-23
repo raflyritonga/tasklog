@@ -12,31 +12,53 @@ O11Y_STACK = -f compose.yaml -f compose.telemetry.yaml -f compose.grafana.yaml -
 
 DD_SITE_SHELL = case "$${DD_SITE:-}" in "") DD_SITE_FULL=datadoghq.com ;; *.*) DD_SITE_FULL=$${DD_SITE} ;; *) DD_SITE_FULL=$${DD_SITE}.datadoghq.com ;; esac; export DD_SITE_FULL
 
-.PHONY: help k8s-elastic-bootstrap docker-grafana docker-o11y docker-down k8s-cluster k8s-app k8s-o11y k8s-elastic k8s-datadog k8s-down k8s-reset k8s-secrets k8s-elastic-wire load demo-latency demo-errors demo-reset
+.PHONY: help docker k8s cluster tf clean reset down datadog-tf-plan datadog-tf-apply k8s-elastic-bootstrap docker-grafana docker-o11y docker-down k8s-cluster k8s-app k8s-o11y k8s-elastic k8s-datadog k8s-down k8s-reset k8s-secrets k8s-elastic-wire load demo-latency demo-errors demo-reset
 
 help:
 	@echo "Tasklog"
 	@echo ""
-	@echo "DOCKER COMPOSE"
-	@echo "  docker-grafana   app + telemetry + grafana stack (works with an empty .env)"
-	@echo "  docker-o11y      app + telemetry + every configured platform"
-	@echo "  docker-down      stop and remove the compose stack"
+	@echo "SETUP"
+	@echo "  cluster        provision the VM + kind + traefik + metrics-server (once)"
+	@echo "  docker         full stack on docker compose"
+	@echo "  k8s            full stack on kubernetes, in the right order"
+	@echo "  tf             datadog monitors + dashboard via terraform"
 	@echo ""
-	@echo "KUBERNETES  (run in this order)"
-	@echo "  k8s-cluster      VM + kind + traefik + metrics-server (ansible)"
-	@echo "  k8s-app          app: secrets, pg, redis, api, web, ingress, seed"
-	@echo "  k8s-o11y         telemetry + grafana stack (kube-prometheus, loki, tempo)"
-	@echo "  k8s-elastic      self-hosted elasticsearch + kibana (ECK)"
-	@echo "  k8s-elastic-bootstrap  geoip ingest pipeline + kibana dashboard and data view"
-	@echo "  k8s-datadog      datadog agent + database monitoring"
-	@echo "  k8s-down         delete the tasklog and o11y namespaces"
-	@echo "  k8s-reset        destroy the kind cluster and rebuild it empty"
+	@echo "DEMO           point at a stage with API_URL / LOAD_URL"
+	@echo "  load           k6 load script"
+	@echo "  demo-errors    inject 500s"
+	@echo "  demo-latency   inject latency"
+	@echo "  demo-reset     clear all levers"
 	@echo ""
-	@echo "DEMO  (point at either stage with API_URL / LOAD_URL)"
-	@echo "  load             k6 load script            LOAD_URL=$(LOAD_URL)"
-	@echo "  demo-latency     inject latency            API_URL=$(API_URL)"
-	@echo "  demo-errors      inject 500s"
-	@echo "  demo-reset       clear all levers"
+	@echo "TEARDOWN"
+	@echo "  down           stop the compose stack"
+	@echo "  clean          delete the tasklog and o11y namespaces"
+	@echo "  reset          destroy the kind cluster and rebuild it empty"
+	@echo ""
+	@echo "Granular targets exist for each component - see README."
+
+docker: docker-o11y
+
+k8s:
+	$(MAKE) k8s-app
+	$(MAKE) k8s-o11y
+	$(MAKE) k8s-elastic
+	$(MAKE) k8s-elastic-wire
+	$(MAKE) k8s-elastic-bootstrap
+	$(MAKE) k8s-datadog
+	@echo ""
+	@echo "app      http://tasklog-demo.orb.local"
+	@echo "grafana  http://grafana.tasklog-demo.orb.local"
+	@echo "kibana   http://kibana.tasklog-demo.orb.local"
+
+cluster: k8s-cluster
+
+tf: datadog-tf-apply
+
+clean: k8s-down
+
+reset: k8s-reset
+
+down: docker-down
 
 docker-grafana:
 	bash deploy/o11y/render.sh
@@ -113,7 +135,13 @@ k8s-elastic-wire:
 	export ELASTIC_ES_ENDPOINT_K8S ELASTIC_ES_USER ELASTIC_ES_PASSWORD; \
 	bash deploy/o11y/render.sh; \
 	$(KC) kubectl -n o11y create secret generic vector-config --from-file=vector.toml=deploy/o11y/vector/vector-k8s.toml --dry-run=client -o yaml | $(KC) kubectl apply -f -
-	$(KC) kubectl -n o11y rollout restart daemonset/vector
+	set -a; [ -f .env ] && . ./.env; set +a; \
+	ESPW=$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}'); \
+	$(KC) kubectl -n o11y create secret generic grafana-env \
+		--from-literal=PG_MONITOR_PASSWORD=$${PG_MONITOR_PASSWORD:-monitor} \
+		--from-literal=ELASTIC_ES_PASSWORD=$$ESPW \
+		--dry-run=client -o yaml | $(KC) kubectl apply -f -
+	$(KC) kubectl -n o11y rollout restart daemonset/vector deployment/kps-grafana
 	$(KC) kubectl -n o11y rollout status daemonset/vector --timeout=180s
 
 k8s-elastic-bootstrap:
@@ -160,6 +188,16 @@ k8s-down:
 k8s-reset:
 	ssh tasklog-demo@orb sudo kind delete cluster --name tasklog
 	$(MAKE) k8s-cluster
+
+TF_ENV = set -a; [ -f .env ] && . ./.env; set +a; \
+	case "$${DD_SITE:-}" in "") site=datadoghq.com ;; *.*) site=$${DD_SITE} ;; *) site=$${DD_SITE}.datadoghq.com ;; esac; \
+	export TF_VAR_dd_api_key=$${DD_API_KEY} TF_VAR_dd_app_key=$${DD_APP_KEY} TF_VAR_dd_site=$$site
+
+datadog-tf-plan:
+	$(TF_ENV); terraform -chdir=terraform init -input=false && terraform -chdir=terraform plan
+
+datadog-tf-apply:
+	$(TF_ENV); terraform -chdir=terraform init -input=false && terraform -chdir=terraform apply -auto-approve
 
 load:
 	k6 run -e BASE_URL=$(LOAD_URL) -e DURATION=$(K6_DURATION) load/k6.js

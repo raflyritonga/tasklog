@@ -4,7 +4,7 @@ metadata:
   name: api
   namespace: tasklog
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: api
@@ -13,6 +13,13 @@ spec:
       labels:
         app: api
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: api
       containers:
         - name: api
           image: ghcr.io/raflyritonga/tasklog-api:dev

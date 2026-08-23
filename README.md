@@ -82,11 +82,8 @@ Everything: the same baseline plus every SaaS platform whose credentials are in 
 ### Stage C — Kubernetes
 
 ```bash
-make k8s-cluster
-make k8s-app
-make k8s-o11y
-make k8s-elastic
-make k8s-datadog
+make cluster
+make k8s
 ```
 
 Provisions the OrbStack VM + kind cluster + Traefik + metrics-server, deploys the app, then lifts the observability stack onto the cluster. App at `http://tasklog-demo.orb.local`, Grafana at `http://grafana.tasklog-demo.orb.local` — three provisioned dashboards (Application, Infrastructure, Data stores) plus the alert pack, from the same files as the compose stage.
@@ -95,32 +92,38 @@ Provisions the OrbStack VM + kind cluster + Traefik + metrics-server, deploys th
 
 | Target | What it does |
 |---|---|
-| **Docker Compose** | |
-| `docker-grafana` | app + telemetry layer + Grafana stack (works with an empty `.env`) |
-| `docker-o11y` | app + telemetry layer + every configured platform |
-| `docker-down` | stop and remove the compose stack |
-| **Kubernetes** (in this order) | |
-| `k8s-cluster` | VM + kind + Traefik + metrics-server (Ansible) |
-| `k8s-app` | app: secrets, pg, redis, api, web, ingress, seed |
-| `k8s-o11y` | telemetry layer + Grafana stack (kube-prometheus, Loki, Tempo) |
-| `k8s-elastic` | self-hosted Elasticsearch + Kibana (ECK operator) |
-| `k8s-datadog` | Datadog agent + database monitoring |
-| `k8s-down` | delete the `tasklog` and `o11y` namespaces |
-| `k8s-reset` | destroy the kind cluster and rebuild it empty |
-| **Demo** (set `API_URL` / `LOAD_URL`) | |
-| `load` | k6 load script |
-| `demo-latency` / `demo-errors` / `demo-reset` | failure-injection levers |
+| `cluster` | provision the VM + kind + Traefik + metrics-server (run once) |
+| `docker` | full stack on Docker Compose |
+| `k8s` | full stack on Kubernetes, in the right order |
+| `tf` | Datadog monitors + dashboard via Terraform |
+| `load` | k6 load script (`LOAD_URL=…`) |
+| `demo-errors` / `demo-latency` / `demo-reset` | failure-injection levers (`API_URL=…`) |
+| `down` | stop the compose stack |
+| `clean` | delete the `tasklog` and `o11y` namespaces |
+| `reset` | destroy the kind cluster and rebuild it empty |
 
-Not in `make help` because they are called by the targets above, but usable directly:
-`k8s-secrets` (render Secrets from `.env`) and `k8s-elastic-wire` (re-point Vector at
-Elasticsearch after it is up).
-
-For the app alone on Compose, or straight from GHCR images:
+### Full run
 
 ```bash
-docker compose up -d --build --wait
-docker compose -f compose.yaml -f compose.ghcr.yaml pull && docker compose -f compose.yaml -f compose.ghcr.yaml up -d
+make cluster     # once per VM
+make k8s         # app + telemetry + grafana + elastic + datadog, ordered
+make tf          # datadog monitors and dashboard
+make load LOAD_URL=http://tasklog-demo.orb.local K6_DURATION=5m
 ```
+
+`make k8s` runs the components in dependency order, which matters: the app's pod
+annotations must exist before the Datadog agent starts, Elasticsearch must be live before
+its ingest pipeline and dashboard are created, and the Elastic wiring step must follow the
+Grafana stack because that stack rebuilds the Vector config and the Grafana secret without
+Elastic credentials.
+
+### Granular targets
+
+Each component can be run alone: `k8s-app`, `k8s-o11y`, `k8s-elastic`, `k8s-elastic-wire`,
+`k8s-elastic-bootstrap`, `k8s-datadog`, `k8s-secrets`, `docker-grafana` (self-hosted only,
+works with an empty `.env`), `docker-o11y`, `datadog-tf-plan`.
+
+Rule of thumb: after any `k8s-o11y` run, follow with `k8s-elastic-wire`.
 
 ## Design notes
 
