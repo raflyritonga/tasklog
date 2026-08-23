@@ -1,0 +1,7 @@
+  elasticsearch/traces:
+    endpoints:
+      - __ELASTIC_ES_ENDPOINT__
+    user: __ELASTIC_ES_USER__
+    password: __ELASTIC_ES_PASSWORD__
+    mapping:
+      mode: otel

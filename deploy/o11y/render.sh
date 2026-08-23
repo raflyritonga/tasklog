@@ -61,6 +61,8 @@ render() {
   fi
   if [ -n "$es_endpoint" ] && [ -n "${ELASTIC_ES_PASSWORD:-}" ]; then
     cat vector/snippets/sink-elastic.toml >> "$vectorconf"
+    cat otel-collector/snippets/exporter-elastic-es.yaml >> "$collector"
+    trace_exporters="$trace_exporters, elasticsearch/traces"
   fi
 
   cat >> "$collector" <<EOF
@@ -89,6 +91,9 @@ EOF
     -e "s|__DD_SITE_FULL__|$dd_site_full|g" \
     -e "s|__DT_TENANT_URL__|${DT_TENANT_URL:-}|g" \
     -e "s|__ELASTIC_APM_ENDPOINT__|${ELASTIC_APM_ENDPOINT:-}|g" \
+    -e "s|__ELASTIC_ES_ENDPOINT__|$es_endpoint|g" \
+    -e "s|__ELASTIC_ES_USER__|${ELASTIC_ES_USER:-elastic}|g" \
+    -e "s|__ELASTIC_ES_PASSWORD__|${ELASTIC_ES_PASSWORD:-}|g" \
     "$collector"
 
   sed -i '' \

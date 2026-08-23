@@ -47,6 +47,7 @@ func RequestLogger(logger *slog.Logger) echo.MiddlewareFunc {
 				"duration_ms", float64(time.Since(start).Microseconds()) / 1000,
 				"trace_id", traceID,
 				"span_id", spanID,
+				"client_ip", c.RealIP(),
 				slog.Group("dd", "trace_id", datadogID(traceID), "span_id", datadogID(spanID)),
 			}
 			if err != nil {

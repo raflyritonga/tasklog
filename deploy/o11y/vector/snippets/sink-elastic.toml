@@ -1,10 +1,42 @@
 
+[transforms.es_prep]
+type = "remap"
+inputs = ["parsed"]
+source = '''
+ts = string(.ts) ?? ""
+if ts != "" {
+  ."@timestamp" = ts
+}
+tid = string(.trace_id) ?? ""
+if tid != "" {
+  .trace = {"id": tid}
+}
+sid = string(.span_id) ?? ""
+if sid != "" {
+  .span = {"id": sid}
+}
+lvl = string(.level) ?? ""
+if lvl != "" {
+  .log = {"level": lvl}
+}
+svc = string(.service) ?? ""
+if svc != "" {
+  .service = {"name": svc}
+}
+msg = string(.msg) ?? ""
+if msg != "" {
+  .message = msg
+}
+del(.dd)
+'''
+
 [sinks.elastic]
 type = "elasticsearch"
-inputs = ["parsed"]
+inputs = ["es_prep"]
 endpoints = ["__ELASTIC_ES_ENDPOINT__"]
 api_version = "auto"
 mode = "bulk"
+pipeline = "tasklog-logs"
 
 [sinks.elastic.bulk]
 action = "create"
