@@ -1,3 +1,5 @@
+import type { Router } from 'vue-router'
+
 type PublicConfig = {
   rumProvider: string
   version: string
@@ -8,40 +10,58 @@ type PublicConfig = {
   elasticApmEndpoint: string
 }
 
-export default defineNuxtPlugin(() => {
-  const config = useRuntimeConfig().public as PublicConfig
-  switch (config.rumProvider) {
-    case 'datadog':
-      initDatadog(config)
-      break
-    case 'dynatrace':
-      initDynatrace(config)
-      break
-    case 'elastic':
-      initElastic(config)
-      break
-    case 'grafana':
-      break
+const tracingUrls = [/^https?:\/\/localhost(:\d+)?\//, /^https?:\/\/tasklog-demo\.orb\.local\//]
+
+export default defineNuxtPlugin({
+  name: 'tasklog-rum',
+  enforce: 'pre',
+  setup() {
+    const config = useRuntimeConfig().public as PublicConfig
+    const router = useRouter()
+    switch (config.rumProvider) {
+      case 'datadog':
+        initDatadog(config, router)
+        break
+      case 'dynatrace':
+        initDynatrace(config)
+        break
+      case 'elastic':
+        initElastic(config)
+        break
+      case 'grafana':
+        break
+    }
   }
 })
 
-async function initDatadog(config: PublicConfig) {
+function datadogSite(site: string) {
+  if (!site) {
+    return 'datadoghq.com'
+  }
+  return site.includes('.') ? site : `${site}.datadoghq.com`
+}
+
+async function initDatadog(config: PublicConfig, router: Router) {
   if (!config.ddRumAppId || !config.ddRumClientToken) {
     return
   }
   const { datadogRum } = await import('@datadog/browser-rum')
+  const { nuxtRumPlugin } = await import('@datadog/browser-rum-nuxt')
   datadogRum.init({
     applicationId: config.ddRumAppId,
     clientToken: config.ddRumClientToken,
-    site: config.ddSite.includes('.') ? config.ddSite : `${config.ddSite || 'us1'}.datadoghq.com`,
+    site: datadogSite(config.ddSite),
     service: 'tasklog-web',
     env: 'dev',
     version: config.version,
     sessionSampleRate: 100,
-    trackUserInteractions: true,
+    sessionReplaySampleRate: 20,
     trackResources: true,
+    trackUserInteractions: true,
     trackLongTasks: true,
-    allowedTracingUrls: [/^https?:\/\/localhost(:\d+)?\//, /^https?:\/\/tasklog-demo\.orb\.local\//]
+    defaultPrivacyLevel: 'mask-user-input',
+    allowedTracingUrls: tracingUrls,
+    plugins: [nuxtRumPlugin({ router })]
   })
 }
 

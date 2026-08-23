@@ -26,54 +26,6 @@ subjects:
     name: vector
     namespace: o11y
 ---
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: vector
-  namespace: o11y
-data:
-  vector.toml: |
-    [sources.k8s]
-    type = "kubernetes_logs"
-    extra_field_selector = "metadata.namespace=tasklog"
-
-    [sources.internal]
-    type = "internal_metrics"
-
-    [transforms.parsed]
-    type = "remap"
-    inputs = ["k8s"]
-    source = '''
-    parsed, err = parse_json(.message)
-    if err == null && is_object(parsed) {
-      . = merge(., object!(parsed))
-    }
-    svc = string(.service) ?? ""
-    if svc == "" {
-      svc = string(.kubernetes.container_name) ?? "unknown"
-    }
-    .service = svc
-    lvl = string(.level) ?? "info"
-    .level = downcase(lvl)
-    .trace_id = string(.trace_id) ?? ""
-    '''
-
-    [sinks.loki]
-    type = "loki"
-    inputs = ["parsed"]
-    endpoint = "http://loki:3100"
-    encoding.codec = "json"
-    dangerously_allow_unconfined_template_resolution = true
-
-    [sinks.loki.labels]
-    service = "{{ service }}"
-    level = "{{ level }}"
-
-    [sinks.prom_exporter]
-    type = "prometheus_exporter"
-    inputs = ["internal"]
-    address = "0.0.0.0:9598"
----
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -99,6 +51,10 @@ spec:
           args:
             - --config
             - /etc/vector/vector.toml
+          envFrom:
+            - secretRef:
+                name: o11y-vendors
+                optional: true
           env:
             - name: VECTOR_SELF_NODE_NAME
               valueFrom:

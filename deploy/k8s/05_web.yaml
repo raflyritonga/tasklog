@@ -17,6 +17,10 @@ spec:
         - name: web
           image: ghcr.io/raflyritonga/tasklog-web:dev
           imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: web-rum
+                optional: true
           ports:
             - containerPort: 3000
           livenessProbe:

@@ -6,3 +6,6 @@ kubeconfig
 node_modules/
 dist/
 .output/
+deploy/o11y/otel-collector/otel-collector-k8s.yaml
+deploy/o11y/vector/vector-k8s.toml
+.nuxt/
