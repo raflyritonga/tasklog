@@ -6,7 +6,7 @@ K6_DURATION ?= 10m
 DEMO_MS ?= 800
 DEMO_RATE ?= 0.5
 
-.PHONY: help dev dev-ghcr o11y-up up deploy deploy-o11y deploy-datadog seed load demo-latency demo-errors demo-reset dashboards secrets down
+.PHONY: help dev dev-ghcr o11y-up dd-up up deploy deploy-o11y deploy-datadog seed load demo-latency demo-errors demo-reset dashboards secrets down
 
 help:
 	@echo "Tasklog"
@@ -14,6 +14,7 @@ help:
 	@echo "  make dev           app stack on docker compose (local builds)"
 	@echo "  make dev-ghcr      app stack on docker compose (GHCR images)"
 	@echo "  make o11y-up       observability pipeline on docker compose"
+	@echo "  make dd-up         o11y pipeline + datadog agent (db monitoring) on compose"
 	@echo "  make up            OrbStack VM + kind cluster + ingress (ansible)"
 	@echo "  make deploy        app + pipeline onto the kind cluster"
 	@echo "  make deploy-o11y   observability stack onto the kind cluster"
@@ -37,6 +38,15 @@ dev-ghcr:
 o11y-up:
 	bash deploy/o11y/render.sh
 	docker compose -f compose.yaml -f compose.o11y.yaml up -d --build --wait
+	docker compose -f compose.yaml -f compose.o11y.yaml up -d --force-recreate otel-collector vector
+
+dd-up:
+	bash deploy/o11y/render.sh
+	set -a; [ -f .env ] && . ./.env; set +a; \
+	case "$${DD_SITE:-}" in "") DD_SITE_FULL=datadoghq.com ;; *.*) DD_SITE_FULL=$${DD_SITE} ;; *) DD_SITE_FULL=$${DD_SITE}.datadoghq.com ;; esac; \
+	export DD_SITE_FULL; \
+	docker compose -f compose.yaml -f compose.o11y.yaml -f compose.dd.yaml up -d --build --wait; \
+	docker compose -f compose.yaml -f compose.o11y.yaml -f compose.dd.yaml up -d --force-recreate otel-collector vector
 
 up:
 	ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
@@ -60,12 +70,13 @@ deploy-o11y:
 	set -a; [ -f .env ] && . ./.env; set +a; \
 	KUBECONFIG=./kubeconfig kubectl -n o11y create secret generic o11y-vendors \
 		--from-literal=DD_API_KEY=$${DD_API_KEY:-} \
+		--from-literal=DATADOG_API_KEY=$${DD_API_KEY:-} \
 		--from-literal=DT_API_TOKEN=$${DT_API_TOKEN:-} \
 		--from-literal=ELASTIC_APM_SECRET_TOKEN=$${ELASTIC_APM_SECRET_TOKEN:-} \
 		--from-literal=ELASTIC_API_KEY=$${ELASTIC_API_KEY:-} \
 		--dry-run=client -o yaml | KUBECONFIG=./kubeconfig kubectl apply -f -
 	KUBECONFIG=./kubeconfig kubectl -n o11y create configmap otel-collector --from-file=config.yaml=deploy/o11y/otel-collector/otel-collector-k8s.yaml --dry-run=client -o yaml | KUBECONFIG=./kubeconfig kubectl apply -f -
-	KUBECONFIG=./kubeconfig kubectl -n o11y create configmap vector --from-file=vector.toml=deploy/o11y/vector/vector-k8s.toml --dry-run=client -o yaml | KUBECONFIG=./kubeconfig kubectl apply -f -
+	KUBECONFIG=./kubeconfig kubectl -n o11y create secret generic vector-config --from-file=vector.toml=deploy/o11y/vector/vector-k8s.toml --dry-run=client -o yaml | KUBECONFIG=./kubeconfig kubectl apply -f -
 	set -a; [ -f .env ] && . ./.env; set +a; \
 	KUBECONFIG=./kubeconfig kubectl -n o11y create secret generic grafana-env --from-literal=PG_MONITOR_PASSWORD=$${PG_MONITOR_PASSWORD:-monitor} --dry-run=client -o yaml | KUBECONFIG=./kubeconfig kubectl apply -f -
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update

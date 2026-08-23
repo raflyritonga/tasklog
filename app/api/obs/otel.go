@@ -16,13 +16,13 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
-func Setup(ctx context.Context, endpoint, version string) (func(context.Context) error, error) {
+func Setup(ctx context.Context, endpoint, version, deployEnv string) (func(context.Context) error, error) {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	res := resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceName("tasklog-api"),
 		semconv.ServiceVersion(version),
-		attribute.String("deployment.environment", "poc"),
+		attribute.String("deployment.environment", deployEnv),
 	)
 	tracerOptions := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
 	if endpoint != "" {

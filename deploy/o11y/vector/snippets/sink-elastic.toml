@@ -10,4 +10,4 @@ action = "create"
 index = "logs-tasklog-default"
 
 [sinks.elastic.request.headers]
-Authorization = "ApiKey ${ELASTIC_API_KEY}"
+Authorization = "ApiKey __ELASTIC_API_KEY__"

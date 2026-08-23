@@ -12,6 +12,9 @@ spec:
     metadata:
       labels:
         app: redis
+      annotations:
+        ad.datadoghq.com/redis.checks: |
+          {"redisdb":{"init_config":{},"instances":[{"host":"%%host%%","port":6379,"tags":["env:dev","project:tasklog"]}]}}
     spec:
       containers:
         - name: redis

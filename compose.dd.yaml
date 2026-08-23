@@ -1,0 +1,24 @@
+services:
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:7.75.0
+    environment:
+      DD_API_KEY: ${DD_API_KEY:?set DD_API_KEY in .env}
+      DD_SITE: ${DD_SITE_FULL:-${DD_SITE:-datadoghq.com}}
+      DD_HOSTNAME: tasklog-compose
+      DD_TAGS: env:dev project:tasklog
+      DD_LOGS_ENABLED: "false"
+      DD_APM_ENABLED: "false"
+      DD_DATABASE_MONITORING_ENABLED: "true"
+      DD_CONTAINER_EXCLUDE: "name:datadog-agent"
+      PG_MONITOR_PASSWORD: ${PG_MONITOR_PASSWORD:-monitor}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - ./deploy/o11y/datadog/conf.d/postgres.d:/etc/datadog-agent/conf.d/postgres.d:ro
+      - ./deploy/o11y/datadog/conf.d/redisdb.d:/etc/datadog-agent/conf.d/redisdb.d:ro
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

@@ -1,0 +1,8 @@
+init_config:
+
+instances:
+  - host: redis
+    port: 6379
+    tags:
+      - env:dev
+      - project:tasklog

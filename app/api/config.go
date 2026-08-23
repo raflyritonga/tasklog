@@ -7,6 +7,7 @@ type config struct {
 	databaseURL  string
 	redisAddr    string
 	otlpEndpoint string
+	deployEnv    string
 }
 
 func loadConfig() config {
@@ -15,6 +16,7 @@ func loadConfig() config {
 		databaseURL:  envOr("DATABASE_URL", "postgres://tasklog:tasklog@localhost:5432/tasklog?sslmode=disable"),
 		redisAddr:    envOr("REDIS_ADDR", "localhost:6379"),
 		otlpEndpoint: os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		deployEnv:    envOr("DEPLOY_ENV", "dev"),
 	}
 }
 
