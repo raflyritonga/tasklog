@@ -39,6 +39,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	stopProfiler, profiling, err := obs.StartProfiler("tasklog-api", version, cfg.deployEnv)
+	if err != nil {
+		logger.Warn("datadog profiler failed to start", "err", err.Error())
+	} else if profiling {
+		logger.Info("datadog continuous profiler started", "version", version, "env", cfg.deployEnv)
+	}
+	defer stopProfiler()
+
 	dbConfig, err := pgxpool.ParseConfig(cfg.databaseURL)
 	if err != nil {
 		logger.Error("invalid database url", "err", err.Error())
