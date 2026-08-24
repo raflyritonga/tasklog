@@ -1,5 +1,6 @@
 tempo:
   reportingEnabled: false
+  retention: 24h
   receivers:
     otlp:
       protocols:
@@ -32,4 +33,7 @@ tempo:
     successThreshold: 1
 
 persistence:
-  enabled: false
+  enabled: true
+  size: 5Gi
+  accessModes:
+    - ReadWriteOnce

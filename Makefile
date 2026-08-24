@@ -5,6 +5,7 @@ LOAD_URL ?= http://localhost:3000
 K6_DURATION ?= 10m
 DEMO_MS ?= 800
 DEMO_RATE ?= 0.5
+DEMO_CPU_MS ?= 60
 
 KC = KUBECONFIG=./kubeconfig
 GRAFANA_STACK = -f compose.yaml -f compose.telemetry.yaml -f compose.grafana.yaml
@@ -103,12 +104,14 @@ k8s-o11y:
 		--dry-run=client -o yaml | $(KC) kubectl apply -f -
 	set -a; [ -f .env ] && . ./.env; set +a; \
 	$(KC) kubectl -n o11y create secret generic grafana-env --from-literal=PG_MONITOR_PASSWORD=$${PG_MONITOR_PASSWORD:-monitor} --dry-run=client -o yaml | $(KC) kubectl apply -f -
-	$(KC) kubectl -n o11y create configmap otel-collector --from-file=config.yaml=deploy/o11y/otel-collector/otel-collector-k8s.yaml --dry-run=client -o yaml | $(KC) kubectl apply -f -
+	$(KC) kubectl -n o11y delete configmap otel-collector --ignore-not-found
+	$(KC) kubectl -n o11y create secret generic otel-collector --from-file=config.yaml=deploy/o11y/otel-collector/otel-collector-k8s.yaml --dry-run=client -o yaml | $(KC) kubectl apply -f -
 	$(KC) kubectl -n o11y create secret generic vector-config --from-file=vector.toml=deploy/o11y/vector/vector-k8s.toml --dry-run=client -o yaml | $(KC) kubectl apply -f -
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
 	helm repo add grafana https://grafana.github.io/helm-charts --force-update
 	$(KC) helm upgrade --install kps prometheus-community/kube-prometheus-stack --version 88.5.3 --namespace o11y -f deploy/o11y/kube-prometheus-stack/values.yaml --wait --timeout 10m
 	$(KC) helm upgrade --install loki grafana/loki --version 7.3.0 --namespace o11y -f deploy/o11y/loki/values-k8s.yaml --wait --timeout 10m
+	$(KC) kubectl -n o11y delete statefulset tempo --ignore-not-found --cascade=foreground
 	$(KC) helm upgrade --install tempo grafana/tempo --version 1.24.4 --namespace o11y -f deploy/o11y/tempo/values-k8s.yaml --wait --timeout 5m
 	$(KC) kubectl -n o11y create configmap grafana-datasources --from-file=datasources.yaml=deploy/o11y/grafana/provisioning-k8s/datasources.yaml --dry-run=client -o yaml | $(KC) kubectl label --local -f - grafana_datasource=1 -o yaml | $(KC) kubectl apply -f -
 	$(KC) kubectl -n o11y create configmap grafana-dashboards --from-file=app.json=deploy/o11y/grafana/provisioning-k8s/dashboard-app.json --from-file=infra.json=deploy/o11y/grafana/provisioning-k8s/dashboard-infra.json --from-file=data.json=deploy/o11y/grafana/provisioning-k8s/dashboard-data.json --dry-run=client -o yaml | $(KC) kubectl label --local -f - grafana_dashboard=1 -o yaml | $(KC) kubectl apply -f -
@@ -207,6 +210,9 @@ demo-latency:
 
 demo-errors:
 	curl -sS -X POST -H "content-type: application/json" -d '{"rate":$(DEMO_RATE)}' $(API_URL)/api/demo/errors
+
+demo-cpu:
+	curl -sS -X POST -H "content-type: application/json" -d '{"ms":$(DEMO_CPU_MS)}' $(API_URL)/api/demo/cpu
 
 demo-reset:
 	curl -sS -X POST $(API_URL)/api/demo/reset
