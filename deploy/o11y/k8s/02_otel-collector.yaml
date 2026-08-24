@@ -70,8 +70,8 @@ spec:
               mountPath: /etc/otelcol-contrib
       volumes:
         - name: config
-          configMap:
-            name: otel-collector
+          secret:
+            secretName: otel-collector
 ---
 apiVersion: v1
 kind: Service

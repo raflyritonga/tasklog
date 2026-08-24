@@ -26,7 +26,7 @@
       "title": "Request rate by route",
       "gridPos": {
         "h": 8,
-        "w": 9,
+        "w": 10,
         "x": 0,
         "y": 1
       },
@@ -54,8 +54,8 @@
       "title": "5xx error ratio (current)",
       "gridPos": {
         "h": 8,
-        "w": 3,
-        "x": 9,
+        "w": 4,
+        "x": 10,
         "y": 1
       },
       "datasource": {
@@ -96,8 +96,8 @@
       "title": "5xx error ratio",
       "gridPos": {
         "h": 8,
-        "w": 6,
-        "x": 12,
+        "w": 10,
+        "x": 14,
         "y": 1
       },
       "datasource": {
@@ -120,14 +120,15 @@
       ]
     },
     {
-      "id": 4,
+      "id": 107,
       "type": "timeseries",
-      "title": "Latency p95 / p99",
+      "title": "Latency p95 by route",
+      "description": "Per-route quantile from the request duration histogram. Health probes excluded - they sit near zero and would flatten the axis.",
       "gridPos": {
         "h": 8,
-        "w": 6,
-        "x": 18,
-        "y": 1
+        "w": 12,
+        "x": 0,
+        "y": 9
       },
       "datasource": {
         "type": "prometheus",
@@ -135,20 +136,82 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 0,
+            "lineWidth": 2
+          }
         },
         "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{route!=\"\"}[5m])))",
-          "legendFormat": "p95"
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(http_server_request_duration_seconds_bucket{route!~\"/healthz|/readyz|/api/demo.*\"}[5m])))",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "id": 108,
+      "type": "timeseries",
+      "title": "Latency p99 by route",
+      "description": "Per-route quantile from the request duration histogram. Health probes excluded - they sit near zero and would flatten the axis.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 0,
+            "lineWidth": 2
+          }
         },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
         {
-          "refId": "B",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{route!=\"\"}[5m])))",
-          "legendFormat": "p99"
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le, route) (rate(http_server_request_duration_seconds_bucket{route!~\"/healthz|/readyz|/api/demo.*\"}[5m])))",
+          "legendFormat": "{{route}}"
         }
       ]
     },
@@ -160,7 +223,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 17
       },
       "datasource": {
         "type": "prometheus",
@@ -188,7 +251,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 24
       }
     },
     {
@@ -199,7 +262,7 @@
         "h": 6,
         "w": 4,
         "x": 0,
-        "y": 17
+        "y": 25
       },
       "datasource": {
         "type": "prometheus",
@@ -236,7 +299,7 @@
         "h": 6,
         "w": 20,
         "x": 4,
-        "y": 17
+        "y": 25
       },
       "datasource": {
         "type": "prometheus",
@@ -264,7 +327,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 23
+        "y": 31
       }
     },
     {
@@ -275,7 +338,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 24
+        "y": 32
       },
       "datasource": {
         "type": "loki",
@@ -304,7 +367,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 24
+        "y": 32
       },
       "datasource": {
         "type": "loki",
@@ -334,7 +397,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 40
       }
     },
     {
@@ -345,7 +408,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 33
+        "y": 41
       },
       "datasource": {
         "type": "prometheus",
@@ -373,7 +436,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 33
+        "y": 41
       },
       "datasource": {
         "type": "prometheus",
@@ -401,7 +464,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 47
       }
     },
     {
@@ -413,7 +476,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 40
+        "y": 48
       },
       "datasource": {
         "type": "elasticsearch",
@@ -461,7 +524,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 40
+        "y": 48
       },
       "datasource": {
         "type": "elasticsearch",
