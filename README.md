@@ -125,6 +125,41 @@ works with an empty `.env`), `docker-o11y`, `datadog-tf-plan`.
 
 Rule of thumb: after any `k8s-o11y` run, follow with `k8s-elastic-wire`.
 
+## Datadog continuous profiling
+
+The only vendor SDK in the Go API, and deliberately opt-in. Datadog has no OTLP ingestion
+path for Go profiles, so unlike traces, metrics and logs this signal cannot be produced
+vendor-neutrally — the choice is vendor code or no profiling, not vendor code or a
+portable equivalent.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `DD_PROFILING_ENABLED` | unset (off) | starts the profiler; with it unset no Datadog code runs |
+| `DD_PROFILING_CONTENTION` | unset (off) | adds goroutine, mutex and block profiles, which carry runtime overhead |
+| `DD_AGENT_HOST` | `localhost` | upload target. **On Kubernetes this must be the node IP** (`status.hostIP`), because the agent is a DaemonSet |
+| `DEPLOY_ENV` | `dev` | must match the agent's `env:` host tag, or profiles never join their traces |
+
+Enabled by default in `deploy/k8s/04_api.yaml` and in `compose.datadog.yaml`; remove
+`DD_PROFILING_ENABLED` from either to get a build with no vendor code executing.
+
+Cost of the dependency, measured: **+4.4 MB binary (+11%)** and **+20 indirect modules**.
+
+Two things that make this fail silently and are worth knowing before debugging it:
+
+- **Service, env and version must match the OTel resource exactly.** Datadog joins a
+  profile to a trace on that triple. A mismatch uploads successfully and the profile simply
+  never appears on the trace's Profiles tab — which reads as "profiling is broken" but is a
+  tagging bug. This is why the agent's `env:` tag is templated from `DEPLOY_ENV` rather than
+  hardcoded; it previously said `env:poc` while the app said `env:dev`.
+- **The agent's APM port is open for profiles, not traces.** `datadog.apm.portEnabled: true`
+  exists only because the profiler has no transport other than the local trace-agent. Traces
+  still leave the app as OTLP to the collector, which owns the Datadog trace export. If you
+  are auditing where traces come from, it is not port 8126.
+
+Where to look in Datadog: **APM → Profiles**, filtered to `service:tasklog-api`. Flame
+graphs appear within a few minutes of load; the Profiles tab on an individual trace is the
+correlation payoff, and it is what the tag matching above buys.
+
 ## Design notes
 
 - No abstraction without two concrete users; boring beats clever.

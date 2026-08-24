@@ -34,6 +34,14 @@ spec:
               value: redis:6379
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: http://otel-collector.o11y.svc.cluster.local:4317
+            - name: DD_PROFILING_ENABLED
+              value: "true"
+            - name: DD_AGENT_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: DEPLOY_ENV
+              value: dev
           ports:
             - containerPort: 8080
           livenessProbe:

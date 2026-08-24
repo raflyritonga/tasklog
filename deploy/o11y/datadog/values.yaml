@@ -3,14 +3,14 @@ datadog:
   site: __DD_SITE_FULL__
   apiKeyExistingSecret: o11y-vendors
   tags:
-    - env:poc
+    - env:__DEPLOY_ENV__
     - project:tasklog
   kubelet:
     tlsVerify: false
   logs:
     enabled: false
   apm:
-    portEnabled: false
+    portEnabled: true
     socketEnabled: false
   processAgent:
     enabled: true

@@ -160,7 +160,7 @@ k8s-datadog:
 	$(DD_SITE_SHELL); \
 	$(KC) kubectl -n o11y create secret generic datadog-secret --from-literal=api-key=$${DD_API_KEY} --dry-run=client -o yaml | $(KC) kubectl apply -f -; \
 	helm repo add datadog https://helm.datadoghq.com --force-update; \
-	sed "s|__DD_SITE_FULL__|$$DD_SITE_FULL|" deploy/o11y/datadog/values.yaml > /tmp/tasklog-dd-values.yaml; \
+	sed -e "s|__DD_SITE_FULL__|$$DD_SITE_FULL|" -e "s|__DEPLOY_ENV__|$${DEPLOY_ENV:-dev}|" deploy/o11y/datadog/values.yaml > /tmp/tasklog-dd-values.yaml; \
 	$(KC) helm upgrade --install datadog datadog/datadog --version 3.240.0 --namespace o11y -f /tmp/tasklog-dd-values.yaml --set datadog.apiKeyExistingSecret=datadog-secret --wait --timeout 10m
 
 k8s-secrets:
