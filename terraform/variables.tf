@@ -37,3 +37,19 @@ variable "duration_metric" {
   type    = string
   default = "http.server.request.duration"
 }
+
+variable "elastic_password" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "elastic_es_endpoint" {
+  type    = string
+  default = "http://localhost:9200"
+}
+
+variable "elastic_kibana_endpoint" {
+  type    = string
+  default = "http://kibana.tasklog-demo.orb.local"
+}

@@ -3,7 +3,7 @@
   "processors": [
     {
       "geoip": {
-        "field": "client_ip",
+        "field": "client.ip",
         "target_field": "client.geo",
         "ignore_missing": true,
         "ignore_failure": true
@@ -18,7 +18,7 @@
     },
     {
       "convert": {
-        "field": "status",
+        "field": "http.response.status_code",
         "type": "integer",
         "ignore_missing": true,
         "ignore_failure": true

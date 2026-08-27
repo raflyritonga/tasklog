@@ -1,0 +1,48 @@
+
+# Dynatrace generic log ingest. Flat dotted keys (service.name, k8s.pod.name)
+# are Dynatrace's recognized semantic attributes; W3C trace_id/span_id stay for
+# log-to-trace correlation. content/severity/timestamp are the reserved fields.
+[transforms.shape_dynatrace]
+type = "remap"
+inputs = ["drop_noise"]
+source = '''
+.content = string(.message) ?? "(no message)"
+del(.message)
+.severity = string(.level) ?? "info"
+del(.level)
+."service.name" = string(.service) ?? "unknown"
+del(.service)
+."service.version" = string(.version) ?? "unknown"
+del(.version)
+."k8s.namespace.name" = string(.k8s.namespace) ?? "unknown"
+."k8s.pod.name" = string(.k8s.pod) ?? "unknown"
+."k8s.container.name" = string(.k8s.container) ?? "unknown"
+del(.k8s)
+del(.dd)
+del(.env)
+'''
+
+# The ingest API wants one JSON ARRAY per request; Vector's http sink builds it
+# from payload_prefix/suffix plus comma framing. Token substituted at render
+# time (Vector does not interpolate env vars); rendered file is a k8s Secret.
+[sinks.dynatrace]
+type = "http"
+inputs = ["shape_dynatrace"]
+uri = "__DT_TENANT_URL__/api/v2/logs/ingest"
+method = "post"
+payload_prefix = "["
+payload_suffix = "]"
+
+[sinks.dynatrace.encoding]
+codec = "json"
+
+[sinks.dynatrace.framing]
+method = "character_delimited"
+character_delimited.delimiter = ","
+
+[sinks.dynatrace.request.headers]
+Authorization = "Api-Token __DT_API_TOKEN__"
+Content-Type = "application/json"
+
+[sinks.dynatrace.batch]
+max_events = 100

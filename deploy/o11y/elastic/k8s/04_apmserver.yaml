@@ -1,0 +1,31 @@
+apiVersion: apm.k8s.elastic.co/v1
+kind: ApmServer
+metadata:
+  name: apm
+  namespace: o11y
+spec:
+  version: 9.5.2
+  count: 1
+  elasticsearchRef:
+    name: elasticsearch
+  http:
+    tls:
+      selfSignedCertificate:
+        disabled: true
+  config:
+    apm-server:
+      rum:
+        enabled: true
+        allow_origins:
+          - http://tasklog-demo.orb.local
+          - http://localhost:3000
+  podTemplate:
+    spec:
+      containers:
+        - name: apm-server
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi

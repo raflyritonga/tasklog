@@ -1,4 +1,4 @@
-  elasticsearch/traces:
+  elasticsearch/otel:
     endpoints:
       - __ELASTIC_ES_ENDPOINT__
     user: __ELASTIC_ES_USER__
