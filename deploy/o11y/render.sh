@@ -36,7 +36,6 @@ render() {
 
   if [ -n "${DD_API_KEY:-}" ]; then
     cat otel-collector/snippets/exporter-datadog.yaml >> "$collector"
-    cat otel-collector/snippets/connector-datadog.yaml >> "$collector"
     cat vector/snippets/sink-datadog.toml >> "$vectorconf"
     trace_exporters="$trace_exporters, datadog, datadog/connector"
     metric_exporters="$metric_exporters, datadog"
@@ -45,6 +44,7 @@ render() {
 
   if [ -n "${DT_TENANT_URL:-}" ] && [ -n "${DT_API_TOKEN:-}" ]; then
     cat otel-collector/snippets/exporter-dynatrace.yaml >> "$collector"
+    cat vector/snippets/sink-dynatrace.toml >> "$vectorconf"
     trace_exporters="$trace_exporters, otlphttp/dynatrace"
     metric_exporters="$metric_exporters, otlphttp/dynatrace"
   fi
@@ -59,10 +59,31 @@ render() {
   if [ "$stage" = "k8s" ] && [ -n "${ELASTIC_ES_ENDPOINT_K8S:-}" ]; then
     es_endpoint="$ELASTIC_ES_ENDPOINT_K8S"
   fi
+  extra_pipelines=""
   if [ -n "$es_endpoint" ] && [ -n "${ELASTIC_ES_PASSWORD:-}" ]; then
     cat vector/snippets/sink-elastic.toml >> "$vectorconf"
     cat otel-collector/snippets/exporter-elastic-es.yaml >> "$collector"
-    trace_exporters="$trace_exporters, elasticsearch/traces"
+    if [ "$stage" = "k8s" ]; then
+      elastic_trace_processors="k8sattributes, resource/tasklog_ds, batch"
+    else
+      elastic_trace_processors="resource/tasklog_ds, batch"
+    fi
+    extra_pipelines="
+    traces/elastic:
+      receivers: [otlp]
+      processors: [$elastic_trace_processors]
+      exporters: [elasticsearch/otel]"
+    if [ "$stage" = "k8s" ]; then
+      extra_pipelines="$extra_pipelines
+    metrics/elastic:
+      receivers: [otlp, k8s_cluster]
+      processors: [resource/tasklog_ds, cumulativetodelta, batch]
+      exporters: [elasticsearch/otel]"
+    fi
+  fi
+
+  if [ -n "${DD_API_KEY:-}" ]; then
+    cat otel-collector/snippets/connector-datadog.yaml >> "$collector"
   fi
 
   cat >> "$collector" <<EOF
@@ -84,7 +105,7 @@ service:
     metrics:
       receivers: [$metric_receivers]
       processors: [batch]
-      exporters: [$metric_exporters]
+      exporters: [$metric_exporters]$extra_pipelines
 EOF
 
   sed -i '' \
@@ -100,6 +121,8 @@ EOF
     -e "s|__DD_SITE_FULL__|$dd_site_full|g" \
     -e "s|__ELASTIC_ES_ENDPOINT__|$es_endpoint|g" \
     -e "s|__DD_API_KEY__|${DD_API_KEY:-}|g" \
+    -e "s|__DT_TENANT_URL__|${DT_TENANT_URL:-}|g" \
+    -e "s|__DT_API_TOKEN__|${DT_API_TOKEN:-}|g" \
     -e "s|__ELASTIC_ES_USER__|${ELASTIC_ES_USER:-elastic}|g" \
     -e "s|__ELASTIC_ES_PASSWORD__|${ELASTIC_ES_PASSWORD:-}|g" \
     "$vectorconf"

@@ -6,7 +6,17 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
 
+  k8s_cluster:
+    auth_type: serviceAccount
+    collection_interval: 30s
+
 processors:
+  resource/tasklog_ds:
+    attributes:
+      - key: data_stream.dataset
+        value: tasklog
+        action: upsert
+  cumulativetodelta: {}
   k8sattributes:
     extract:
       metadata:

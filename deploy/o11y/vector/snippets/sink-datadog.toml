@@ -1,29 +1,38 @@
 
-[transforms.dd_filter]
-type = "filter"
-inputs = ["parsed"]
-condition = '''
-svc = string(.service) ?? ""
-route = string(.route) ?? ""
-app = includes(["tasklog-api", "api", "web", "pg", "postgres", "redis"], svc)
-app && !includes(["/healthz", "/readyz"], route)
-'''
-
-[transforms.dd_prep]
+# Order-critical: Datadog reserves `status` for the log LEVEL. Move the HTTP
+# status out first, then put the level into `status` - reversed, the level
+# overwrites the HTTP code. `dd.trace_id`/`dd.span_id` stay: they are the decimal
+# ids Datadog's log-to-APM remapper reads; the W3C hex ids are useless here.
+# Durations are nanoseconds because that is what Datadog's duration remapper expects.
+[transforms.shape_datadog]
 type = "remap"
-inputs = ["dd_filter"]
+inputs = ["drop_noise"]
 source = '''
-.ddsource = "go"
-.ddtags = "env:dev,project:tasklog"
-.status = .level
-msg = string(.msg) ?? ""
-if msg != "" {
-  .message = msg
-}
+st = del(.status)
+if st != null { .http = {"status_code": st} }
+.status = del(.level)
+cip = del(.client_ip)
+if cip != null { .network = {"client": {"ip": cip}} }
+d = float(.duration_ms) ?? -1.0
+if d >= 0.0 { .duration = to_int(d * 1000000.0) }
+del(.duration_ms)
+del(.trace_id)
+del(.span_id)
+.ddsource = "vector"
+.hostname = string(.k8s.node) ?? "unknown"
+env_v = string(.env) ?? "dev"
+ver = string(.version) ?? "unknown"
+ns = string(.k8s.namespace) ?? "unknown"
+pod = string(.k8s.pod) ?? "unknown"
+.ddtags = "env:" + env_v + ",version:" + ver + ",kube_namespace:" + ns + ",pod_name:" + pod
+del(.k8s)
+del(.env)
+del(.version)
 '''
 
 [sinks.datadog]
 type = "datadog_logs"
-inputs = ["dd_prep"]
+inputs = ["shape_datadog"]
 default_api_key = "__DD_API_KEY__"
 site = "__DD_SITE_FULL__"
+compression = "gzip"

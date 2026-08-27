@@ -58,6 +58,6 @@ datasources:
     secureJsonData:
       basicAuthPassword: $ELASTIC_ES_PASSWORD
     jsonData:
-      index: logs-tasklog-default
+      index: logs-tasklog*
       timeField: '@timestamp'
       maxConcurrentShardRequests: 5

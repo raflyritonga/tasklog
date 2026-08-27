@@ -137,24 +137,35 @@ k8s-elastic-wire:
 	ELASTIC_ES_PASSWORD=$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}'); \
 	export ELASTIC_ES_ENDPOINT_K8S ELASTIC_ES_USER ELASTIC_ES_PASSWORD; \
 	bash deploy/o11y/render.sh; \
-	$(KC) kubectl -n o11y create secret generic vector-config --from-file=vector.toml=deploy/o11y/vector/vector-k8s.toml --dry-run=client -o yaml | $(KC) kubectl apply -f -
+	$(KC) kubectl -n o11y create secret generic vector-config --from-file=vector.toml=deploy/o11y/vector/vector-k8s.toml --dry-run=client -o yaml | $(KC) kubectl apply -f -; \
+	$(KC) kubectl -n o11y create secret generic otel-collector --from-file=config.yaml=deploy/o11y/otel-collector/otel-collector-k8s.yaml --dry-run=client -o yaml | $(KC) kubectl apply -f -
 	set -a; [ -f .env ] && . ./.env; set +a; \
 	ESPW=$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}'); \
 	$(KC) kubectl -n o11y create secret generic grafana-env \
 		--from-literal=PG_MONITOR_PASSWORD=$${PG_MONITOR_PASSWORD:-monitor} \
 		--from-literal=ELASTIC_ES_PASSWORD=$$ESPW \
 		--dry-run=client -o yaml | $(KC) kubectl apply -f -
+	$(KC) kubectl -n o11y rollout restart deployment/otel-collector daemonset/vector
+	$(KC) kubectl -n o11y rollout status deployment/otel-collector --timeout=180s
+	$(KC) kubectl -n o11y rollout status daemonset/vector --timeout=180s
+	$(KC) kubectl -n o11y create configmap grafana-datasources --from-file=datasources.yaml=deploy/o11y/grafana/provisioning-k8s/datasources.yaml --dry-run=client -o yaml | $(KC) kubectl label --local -f - grafana_datasource=1 -o yaml | $(KC) kubectl apply -f -
 	$(KC) kubectl -n o11y rollout restart daemonset/vector deployment/kps-grafana
 	$(KC) kubectl -n o11y rollout status daemonset/vector --timeout=180s
 
 k8s-elastic-bootstrap:
-	ESPW=$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}'); \
+	ESAUTH="elastic:$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}')"; \
 	$(KC) kubectl -n o11y exec -i statefulset/elasticsearch-es-default -c elasticsearch -- \
-		curl -sS -u "elastic:$$ESPW" -X PUT "http://localhost:9200/_ingest/pipeline/tasklog-logs" \
+		curl -sS -u "$$ESAUTH" -X PUT "http://localhost:9200/_ingest/pipeline/tasklog-logs" \
 		-H 'Content-Type: application/json' --data-binary @- < deploy/o11y/elastic/ingest-pipeline.json; \
 	echo; \
-	curl -sS -u "elastic:$$ESPW" -X POST "http://kibana.tasklog-demo.orb.local/api/saved_objects/_import?overwrite=true" \
+	curl -sS -u "$$ESAUTH" -X POST "http://kibana.tasklog-demo.orb.local/api/saved_objects/_import?overwrite=true" \
 		-H 'kbn-xsrf: true' -F file=@deploy/o11y/elastic/kibana-objects.ndjson; \
+	echo; \
+	curl -sS -u "$$ESAUTH" -X POST "http://kibana.tasklog-demo.orb.local/api/saved_objects/_import?overwrite=true" \
+		-H 'kbn-xsrf: true' -F file=@deploy/o11y/elastic/kibana-objects-traces.ndjson; \
+	echo; \
+	curl -sS -u "$$ESAUTH" -X POST "http://kibana.tasklog-demo.orb.local/api/saved_objects/_import?overwrite=true" \
+		-H 'kbn-xsrf: true' -F file=@deploy/o11y/elastic/kibana-dashboard-apm.ndjson; \
 	echo
 
 k8s-datadog:
@@ -181,7 +192,7 @@ k8s-secrets:
 		--from-literal=NUXT_PUBLIC_DD_RUM_APP_ID=$${DD_RUM_APP_ID:-} \
 		--from-literal=NUXT_PUBLIC_DD_RUM_CLIENT_TOKEN=$${DD_RUM_CLIENT_TOKEN:-} \
 		--from-literal=NUXT_PUBLIC_DT_RUM_SCRIPT_URL=$${DT_RUM_SCRIPT_URL:-} \
-		--from-literal=NUXT_PUBLIC_ELASTIC_APM_ENDPOINT=$${ELASTIC_APM_ENDPOINT:-} \
+		--from-literal=NUXT_PUBLIC_ELASTIC_APM_ENDPOINT=$${ELASTIC_RUM_ENDPOINT:-} \
 		--dry-run=client -o yaml | $(KC) kubectl apply -f -
 
 k8s-down:
@@ -194,7 +205,8 @@ k8s-reset:
 
 TF_ENV = set -a; [ -f .env ] && . ./.env; set +a; \
 	case "$${DD_SITE:-}" in "") site=datadoghq.com ;; *.*) site=$${DD_SITE} ;; *) site=$${DD_SITE}.datadoghq.com ;; esac; \
-	export TF_VAR_dd_api_key=$${DD_API_KEY} TF_VAR_dd_app_key=$${DD_APP_KEY} TF_VAR_dd_site=$$site
+	export TF_VAR_dd_api_key=$${DD_API_KEY} TF_VAR_dd_app_key=$${DD_APP_KEY} TF_VAR_dd_site=$$site; \
+	export TF_VAR_elastic_password=$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}' 2>/dev/null || echo "")
 
 datadog-tf-plan:
 	$(TF_ENV); terraform -chdir=terraform init -input=false && terraform -chdir=terraform plan

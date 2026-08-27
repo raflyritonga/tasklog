@@ -10,31 +10,79 @@ type = "prometheus_exporter"
 inputs = ["internal"]
 address = "0.0.0.0:9598"
 
-[transforms.parsed]
+# One canonical event, built once. Platform-specific shaping happens in the
+# shape_* transforms downstream, never here and never in the app.
+[transforms.normalize]
 type = "remap"
 inputs = ["k8s"]
 source = '''
-parsed, err = parse_json(.message)
-if err == null && is_object(parsed) {
-  . = merge(., object!(parsed))
+raw, err = parse_json(string(.message) ?? "")
+if err == null && is_object(raw) {
+  . = merge(., object!(raw))
+  m = del(.msg)
+  if m != null { .message = m }
 }
-svc = string(.service) ?? ""
-if svc == "" {
-  svc = string(.kubernetes.container_name) ?? "unknown"
+ts = string(.ts) ?? ""
+if ts != "" {
+  parsed_ts, terr = parse_timestamp(ts, "%+")
+  if terr == null { .timestamp = parsed_ts }
+  del(.ts)
 }
-.service = svc
-lvl = string(.level) ?? "info"
-.level = downcase(lvl)
-.trace_id = string(.trace_id) ?? ""
+.service = string(.service) ?? (string(.kubernetes.pod_labels.app) ?? (string(.kubernetes.container_name) ?? "unknown"))
+.level = downcase(string(.level) ?? "info")
+.env = "dev"
+img = string(.kubernetes.container_image) ?? ""
+if contains(img, ":") {
+  .version = replace(img, r'^.*:', "")
+} else {
+  .version = "unknown"
+}
+.k8s = {
+  "namespace": string(.kubernetes.pod_namespace) ?? "unknown",
+  "pod": string(.kubernetes.pod_name) ?? "unknown",
+  "container": string(.kubernetes.container_name) ?? "unknown",
+  "node": string(.kubernetes.pod_node_name) ?? "unknown",
+  "workload": string(.kubernetes.pod_owner) ?? "unknown"
+}
+del(.kubernetes)
+del(.file)
+del(.source_type)
+del(.stream)
 '''
 
+[transforms.drop_noise]
+type = "filter"
+inputs = ["normalize"]
+condition = '''
+route = string(.route) ?? ""
+!includes(["/healthz", "/readyz", "/livez"], route)
+'''
+
+[transforms.shape_loki]
+type = "remap"
+inputs = ["drop_noise"]
+source = '''
+del(.dd)
+del(.k8s.workload)
+del(.version)
+'''
+
+# Labels are for stream selection only: few fields, few values. Never label
+# pod, trace_id, client_ip, status or duration - each unique combination is its
+# own stream, and unbounded values melt Loki. Grafana finds traces via a derived
+# field on the body, not a label:
+#   regex "trace_id":"(\w+)" -> Tempo datasource.
 [sinks.loki]
 type = "loki"
-inputs = ["parsed"]
+inputs = ["shape_loki"]
 endpoint = "http://loki:3100"
 encoding.codec = "json"
+remove_label_fields = true
 dangerously_allow_unconfined_template_resolution = true
 
 [sinks.loki.labels]
 service = "{{ service }}"
+namespace = "{{ k8s.namespace }}"
+container = "{{ k8s.container }}"
 level = "{{ level }}"
+env = "{{ env }}"

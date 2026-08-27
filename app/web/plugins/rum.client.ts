@@ -20,7 +20,12 @@ export default defineNuxtPlugin({
     const config = useRuntimeConfig().public as PublicConfig
     const router = useRouter()
     const nuxtApp = useNuxtApp()
-    switch (config.rumProvider) {
+    let provider = config.rumProvider
+    const stored = window.localStorage.getItem('tasklog-rum-provider') ?? ''
+    if (['datadog', 'dynatrace', 'elastic', 'none'].includes(stored)) {
+      provider = stored
+    }
+    switch (provider) {
       case 'datadog':
         initDatadog(config, router, nuxtApp)
         break

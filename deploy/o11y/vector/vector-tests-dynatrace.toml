@@ -1,0 +1,30 @@
+[[tests]]
+name = "shape_dynatrace maps to dynatrace log semantics"
+
+[[tests.inputs]]
+insert_at = "shape_dynatrace"
+type = "log"
+[tests.inputs.log_fields]
+message = "GET /api/tasks"
+level = "info"
+service = "tasklog-api"
+env = "dev"
+version = "dev"
+route = "/api/tasks"
+status = 200
+duration_ms = 0.534
+trace_id = "00000000000000000faa62aeea08cf8a"
+span_id = "4cd2be36bf6598bf"
+"dd.trace_id" = "1128823160000008074"
+"k8s.namespace" = "tasklog"
+"k8s.pod" = "api-1"
+"k8s.container" = "api"
+"k8s.node" = "tasklog-worker"
+
+[[tests.outputs]]
+extract_from = "shape_dynatrace"
+[[tests.outputs.conditions]]
+type = "vrl"
+source = '''
+.content == "GET /api/tasks" && .severity == "info" && ."service.name" == "tasklog-api" && ."k8s.pod.name" == "api-1" && .trace_id == "00000000000000000faa62aeea08cf8a" && !exists(.dd) && !exists(.k8s) && !exists(.message) && !exists(.level)
+'''
