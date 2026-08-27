@@ -153,18 +153,18 @@ k8s-elastic-wire:
 	$(KC) kubectl -n o11y rollout status daemonset/vector --timeout=180s
 
 k8s-elastic-bootstrap:
-	ESPW=$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}'); \
+	ESAUTH="elastic:$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}')"; \
 	$(KC) kubectl -n o11y exec -i statefulset/elasticsearch-es-default -c elasticsearch -- \
-		curl -sS -u "elastic:$$ESPW" -X PUT "http://localhost:9200/_ingest/pipeline/tasklog-logs" \
+		curl -sS -u "$$ESAUTH" -X PUT "http://localhost:9200/_ingest/pipeline/tasklog-logs" \
 		-H 'Content-Type: application/json' --data-binary @- < deploy/o11y/elastic/ingest-pipeline.json; \
 	echo; \
-	curl -sS -u "elastic:$$ESPW" -X POST "http://kibana.tasklog-demo.orb.local/api/saved_objects/_import?overwrite=true" \
+	curl -sS -u "$$ESAUTH" -X POST "http://kibana.tasklog-demo.orb.local/api/saved_objects/_import?overwrite=true" \
 		-H 'kbn-xsrf: true' -F file=@deploy/o11y/elastic/kibana-objects.ndjson; \
 	echo; \
-	curl -sS -u "elastic:$$ESPW" -X POST "http://kibana.tasklog-demo.orb.local/api/saved_objects/_import?overwrite=true" \
+	curl -sS -u "$$ESAUTH" -X POST "http://kibana.tasklog-demo.orb.local/api/saved_objects/_import?overwrite=true" \
 		-H 'kbn-xsrf: true' -F file=@deploy/o11y/elastic/kibana-objects-traces.ndjson; \
 	echo; \
-	curl -sS -u "elastic:$$ESPW" -X POST "http://kibana.tasklog-demo.orb.local/api/saved_objects/_import?overwrite=true" \
+	curl -sS -u "$$ESAUTH" -X POST "http://kibana.tasklog-demo.orb.local/api/saved_objects/_import?overwrite=true" \
 		-H 'kbn-xsrf: true' -F file=@deploy/o11y/elastic/kibana-dashboard-apm.ndjson; \
 	echo
 
