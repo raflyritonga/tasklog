@@ -41,6 +41,15 @@ render() {
     trace_exporters="$trace_exporters, datadog, datadog/connector"
     metric_exporters="$metric_exporters, datadog"
     metric_receivers="$metric_receivers, datadog/connector"
+    # Cluster-state copy for the Datadog infrastructure dashboard. The datadog
+    # exporter translates cumulative OTLP itself, so no cumulativetodelta here.
+    if [ "$stage" = "k8s" ]; then
+      extra_pipelines="$extra_pipelines
+    metrics/datadog-infra:
+      receivers: [k8s_cluster]
+      processors: [batch]
+      exporters: [datadog]"
+    fi
   fi
 
   if [ -n "${DT_TENANT_URL:-}" ] && [ -n "${DT_API_TOKEN:-}" ]; then
