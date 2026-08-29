@@ -18,7 +18,7 @@ esac
 vendors=""
 [ -n "${DD_API_KEY:-}" ] && vendors="$vendors datadog"
 [ -n "${DT_TENANT_URL:-}" ] && [ -n "${DT_API_TOKEN:-}" ] && vendors="$vendors dynatrace"
-[ -n "${ELASTIC_APM_ENDPOINT:-}" ] && vendors="$vendors elastic-apm"
+{ [ -n "${ELASTIC_APM_ENDPOINT:-}" ] || [ -n "${ELASTIC_APM_ENDPOINT_K8S:-}" ]; } && vendors="$vendors elastic-apm"
 { [ -n "${ELASTIC_ES_ENDPOINT:-}" ] || [ -n "${ELASTIC_ES_ENDPOINT_K8S:-}" ]; } && [ -n "${ELASTIC_ES_PASSWORD:-}" ] && vendors="$vendors elastic-logs"
 
 render() {
@@ -30,6 +30,7 @@ render() {
   trace_exporters="otlp/tempo"
   metric_exporters="prometheus"
   metric_receivers="otlp"
+  extra_pipelines=""
 
   cp "otel-collector/snippets/base-$stage.yaml" "$collector"
   cp "vector/snippets/base-$stage.toml" "$vectorconf"
@@ -46,10 +47,26 @@ render() {
     cat otel-collector/snippets/exporter-dynatrace.yaml >> "$collector"
     cat vector/snippets/sink-dynatrace.toml >> "$vectorconf"
     trace_exporters="$trace_exporters, otlphttp/dynatrace"
-    metric_exporters="$metric_exporters, otlphttp/dynatrace"
+    if [ "$stage" = "k8s" ]; then
+      dt_metric_receivers="otlp, k8s_cluster"
+    else
+      dt_metric_receivers="otlp"
+    fi
+    extra_pipelines="$extra_pipelines
+    metrics/dynatrace:
+      receivers: [$dt_metric_receivers]
+      processors: [cumulativetodelta, batch]
+      exporters: [otlphttp/dynatrace]"
   fi
 
-  if [ -n "${ELASTIC_APM_ENDPOINT:-}" ]; then
+  # APM Server (OTLP intake) is the supported path into Kibana's Applications UI:
+  # it writes native traces-apm-* data streams, so tasklog-api joins tasklog-web
+  # (RUM) in the Service Inventory and in end-to-end traces.
+  apm_endpoint="${ELASTIC_APM_ENDPOINT:-}"
+  if [ "$stage" = "k8s" ] && [ -n "${ELASTIC_APM_ENDPOINT_K8S:-}" ]; then
+    apm_endpoint="$ELASTIC_APM_ENDPOINT_K8S"
+  fi
+  if [ -n "$apm_endpoint" ]; then
     cat otel-collector/snippets/exporter-elastic.yaml >> "$collector"
     trace_exporters="$trace_exporters, otlphttp/elastic"
     metric_exporters="$metric_exporters, otlphttp/elastic"
@@ -59,26 +76,42 @@ render() {
   if [ "$stage" = "k8s" ] && [ -n "${ELASTIC_ES_ENDPOINT_K8S:-}" ]; then
     es_endpoint="$ELASTIC_ES_ENDPOINT_K8S"
   fi
-  extra_pipelines=""
   if [ -n "$es_endpoint" ] && [ -n "${ELASTIC_ES_PASSWORD:-}" ]; then
     cat vector/snippets/sink-elastic.toml >> "$vectorconf"
     cat otel-collector/snippets/exporter-elastic-es.yaml >> "$collector"
     if [ "$stage" = "k8s" ]; then
-      elastic_trace_processors="k8sattributes, resource/tasklog_ds, batch"
+      elastic_trace_processors="filter/probe_noise, k8sattributes, resource/tasklog_ds, batch"
     else
-      elastic_trace_processors="resource/tasklog_ds, batch"
+      elastic_trace_processors="filter/probe_noise, resource/tasklog_ds, batch"
     fi
-    extra_pipelines="
+    # When APM Server handles app traces/metrics, skip the raw elasticsearch/otel
+    # copies of the same OTLP data (avoids double-written traces that the APM UI
+    # cannot read). Infra metrics and logs still go direct to Elasticsearch.
+    if [ -z "$apm_endpoint" ]; then
+      extra_pipelines="$extra_pipelines
     traces/elastic:
       receivers: [otlp]
       processors: [$elastic_trace_processors]
       exporters: [elasticsearch/otel]"
+    fi
     if [ "$stage" = "k8s" ]; then
       extra_pipelines="$extra_pipelines
     metrics/elastic:
-      receivers: [otlp, k8s_cluster]
+      receivers: [otlp]
       processors: [resource/tasklog_ds, cumulativetodelta, batch]
       exporters: [elasticsearch/otel]"
+      extra_pipelines="$extra_pipelines
+    metrics/elastic-infra:
+      receivers: [k8s_cluster]
+      processors: [cumulativetodelta, batch]
+      exporters: [elasticsearch/otel]"
+      agentconf="otel-collector/otel-agent-k8s.yaml"
+      cp otel-collector/snippets/agent-k8s.yaml "$agentconf"
+      sed -i '' \
+        -e "s|__ELASTIC_ES_ENDPOINT__|$es_endpoint|g" \
+        -e "s|__ELASTIC_ES_USER__|${ELASTIC_ES_USER:-elastic}|g" \
+        -e "s|__ELASTIC_ES_PASSWORD__|${ELASTIC_ES_PASSWORD:-}|g" \
+        "$agentconf"
     fi
   fi
 
@@ -111,7 +144,7 @@ EOF
   sed -i '' \
     -e "s|__DD_SITE_FULL__|$dd_site_full|g" \
     -e "s|__DT_TENANT_URL__|${DT_TENANT_URL:-}|g" \
-    -e "s|__ELASTIC_APM_ENDPOINT__|${ELASTIC_APM_ENDPOINT:-}|g" \
+    -e "s|__ELASTIC_APM_ENDPOINT__|$apm_endpoint|g" \
     -e "s|__ELASTIC_ES_ENDPOINT__|$es_endpoint|g" \
     -e "s|__ELASTIC_ES_USER__|${ELASTIC_ES_USER:-elastic}|g" \
     -e "s|__ELASTIC_ES_PASSWORD__|${ELASTIC_ES_PASSWORD:-}|g" \
@@ -128,8 +161,8 @@ EOF
     "$vectorconf"
 }
 
-render compose otel-collector/otel-collector.yaml vector/vector.toml batch
-render k8s otel-collector/otel-collector-k8s.yaml vector/vector-k8s.toml "k8sattributes, batch"
+render compose otel-collector/otel-collector.yaml vector/vector.toml "filter/probe_noise, batch"
+render k8s otel-collector/otel-collector-k8s.yaml vector/vector-k8s.toml "filter/probe_noise, k8sattributes, batch"
 
 if [ -z "$vendors" ]; then
   echo "rendered grafana-only pipeline (no SaaS credentials in .env)"

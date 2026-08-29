@@ -119,11 +119,11 @@ Elastic credentials.
 
 ### Granular targets
 
-Each component can be run alone: `k8s-app`, `k8s-o11y`, `k8s-elastic`, `k8s-elastic-wire`,
+Each component can be run alone: `k8s-app`, `k8s-o11y`, `k8s-elastic`, `k8s-o11y-wire`,
 `k8s-elastic-bootstrap`, `k8s-datadog`, `k8s-secrets`, `docker-grafana` (self-hosted only,
 works with an empty `.env`), `docker-o11y`, `datadog-tf-plan`.
 
-Rule of thumb: after any `k8s-o11y` run, follow with `k8s-elastic-wire`.
+Rule of thumb: after any `k8s-o11y` run, follow with `k8s-o11y-wire` — install puts the stack up, wire renders and delivers every vendor config (it must run in-cluster reach because the Elasticsearch password only exists there).
 
 ## Datadog continuous profiling
 

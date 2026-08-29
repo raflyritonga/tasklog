@@ -12,6 +12,12 @@ processors:
       - key: data_stream.dataset
         value: tasklog
         action: upsert
+  cumulativetodelta: {}
+  filter/probe_noise:
+    error_mode: ignore
+    traces:
+      span:
+        - IsRootSpan() and (name == "ping" or name == "redis.dial")
   batch: {}
 
 exporters:

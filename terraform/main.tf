@@ -5,6 +5,10 @@ terraform {
       source  = "DataDog/datadog"
       version = "~> 3.60"
     }
+    dynatrace = {
+      source  = "dynatrace-oss/dynatrace"
+      version = "~> 1.60"
+    }
     elasticstack = {
       source  = "elastic/elasticstack"
       version = "~> 0.11"
