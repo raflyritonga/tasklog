@@ -14,6 +14,10 @@ spec:
         disabled: true
   config:
     server.publicBaseUrl: http://kibana.tasklog-demo.orb.local
+    xpack.apm.indices.transaction: traces-apm*,apm-*,traces-*.otel-*
+    xpack.apm.indices.span: traces-apm*,apm-*,traces-*.otel-*
+    xpack.apm.indices.error: logs-apm*,apm-*,logs-*.otel-*
+    xpack.apm.indices.metric: metrics-apm*,apm-*,metrics-*.otel-*
   podTemplate:
     spec:
       containers:

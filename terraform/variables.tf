@@ -53,3 +53,19 @@ variable "elastic_kibana_endpoint" {
   type    = string
   default = "http://kibana.tasklog-demo.orb.local"
 }
+
+variable "dt_tenant_url" {
+  type    = string
+  default = ""
+}
+
+variable "dt_api_token" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "dt_request_metric" {
+  type    = string
+  default = "http.server.request.count"
+}

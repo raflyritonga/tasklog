@@ -67,7 +67,7 @@ async function initDatadog(config: PublicConfig, router: Router, nuxtApp: NuxtAp
     trackUserInteractions: true,
     trackLongTasks: true,
     defaultPrivacyLevel: 'mask-user-input',
-    allowedTracingUrls: tracingUrls,
+    allowedTracingUrls: ['http://localhost:3000', 'http://tasklog-demo.orb.local'],
     plugins: [nuxtRumPlugin({ router, nuxtApp })]
   })
 }

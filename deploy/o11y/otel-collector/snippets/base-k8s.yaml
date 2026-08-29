@@ -9,6 +9,8 @@ receivers:
   k8s_cluster:
     auth_type: serviceAccount
     collection_interval: 30s
+    allocatable_types_to_report: [cpu, memory]
+    node_conditions_to_report: [Ready, MemoryPressure]
 
 processors:
   resource/tasklog_ds:
@@ -17,6 +19,11 @@ processors:
         value: tasklog
         action: upsert
   cumulativetodelta: {}
+  filter/probe_noise:
+    error_mode: ignore
+    traces:
+      span:
+        - IsRootSpan() and (name == "ping" or name == "redis.dial")
   k8sattributes:
     extract:
       metadata:

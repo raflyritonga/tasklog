@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 API_URL ?= http://localhost:8080
-LOAD_URL ?= http://localhost:3000
+LOAD_URL ?= http://tasklog-demo.orb.local
 K6_DURATION ?= 10m
 DEMO_MS ?= 800
 DEMO_RATE ?= 0.5
@@ -43,7 +43,7 @@ k8s:
 	$(MAKE) k8s-app
 	$(MAKE) k8s-o11y
 	$(MAKE) k8s-elastic
-	$(MAKE) k8s-elastic-wire
+	$(MAKE) k8s-o11y-wire
 	$(MAKE) k8s-elastic-bootstrap
 	$(MAKE) k8s-datadog
 	@echo ""
@@ -105,7 +105,8 @@ k8s-o11y:
 	set -a; [ -f .env ] && . ./.env; set +a; \
 	$(KC) kubectl -n o11y create secret generic grafana-env --from-literal=PG_MONITOR_PASSWORD=$${PG_MONITOR_PASSWORD:-monitor} --dry-run=client -o yaml | $(KC) kubectl apply -f -
 	$(KC) kubectl -n o11y delete configmap otel-collector --ignore-not-found
-	$(KC) kubectl -n o11y create secret generic otel-collector --from-file=config.yaml=deploy/o11y/otel-collector/otel-collector-k8s.yaml --dry-run=client -o yaml | $(KC) kubectl apply -f -
+	$(KC) kubectl -n o11y create secret generic otel-collector --from-file=config.yaml=deploy/o11y/otel-collector/otel-collector-k8s.yaml --dry-run=client -o yaml | $(KC) kubectl apply -f -; \
+	[ -f deploy/o11y/otel-collector/otel-agent-k8s.yaml ] && $(KC) kubectl -n o11y create secret generic otel-agent --from-file=config.yaml=deploy/o11y/otel-collector/otel-agent-k8s.yaml --dry-run=client -o yaml | $(KC) kubectl apply -f - || true
 	$(KC) kubectl -n o11y create secret generic vector-config --from-file=vector.toml=deploy/o11y/vector/vector-k8s.toml --dry-run=client -o yaml | $(KC) kubectl apply -f -
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
 	helm repo add grafana https://grafana.github.io/helm-charts --force-update
@@ -118,6 +119,7 @@ k8s-o11y:
 	$(KC) kubectl -n o11y create configmap grafana-alerts --from-file=alerts.yaml=deploy/o11y/grafana/provisioning-k8s/alert-rules.yaml --dry-run=client -o yaml | $(KC) kubectl label --local -f - grafana_alert=1 -o yaml | $(KC) kubectl apply -f -
 	$(KC) kubectl apply -f deploy/o11y/k8s/
 	$(KC) kubectl -n o11y rollout restart deployment/otel-collector daemonset/vector
+	-$(KC) kubectl -n o11y rollout restart daemonset/otel-agent
 	$(KC) kubectl -n o11y rollout status deployment/otel-collector --timeout=180s
 	$(KC) kubectl -n o11y rollout status daemonset/vector --timeout=180s
 
@@ -128,17 +130,21 @@ k8s-elastic:
 	$(KC) kubectl apply -f deploy/o11y/elastic/k8s/
 	$(KC) kubectl -n o11y wait --for=jsonpath='{.status.phase}'=Ready elasticsearch/elasticsearch --timeout=600s
 	$(KC) kubectl -n o11y wait --for=jsonpath='{.status.health}'=green kibana/kibana --timeout=600s
-	$(MAKE) k8s-elastic-wire
+	$(MAKE) k8s-o11y-wire
 
-k8s-elastic-wire:
+k8s-elastic-wire: k8s-o11y-wire
+
+k8s-o11y-wire:
 	set -a; [ -f .env ] && . ./.env; set +a; \
 	ELASTIC_ES_ENDPOINT_K8S=http://elasticsearch-es-http.o11y.svc:9200; \
+	ELASTIC_APM_ENDPOINT_K8S=http://apm-apm-http.o11y.svc:8200; \
 	ELASTIC_ES_USER=elastic; \
 	ELASTIC_ES_PASSWORD=$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}'); \
-	export ELASTIC_ES_ENDPOINT_K8S ELASTIC_ES_USER ELASTIC_ES_PASSWORD; \
+	export ELASTIC_ES_ENDPOINT_K8S ELASTIC_APM_ENDPOINT_K8S ELASTIC_ES_USER ELASTIC_ES_PASSWORD; \
 	bash deploy/o11y/render.sh; \
 	$(KC) kubectl -n o11y create secret generic vector-config --from-file=vector.toml=deploy/o11y/vector/vector-k8s.toml --dry-run=client -o yaml | $(KC) kubectl apply -f -; \
-	$(KC) kubectl -n o11y create secret generic otel-collector --from-file=config.yaml=deploy/o11y/otel-collector/otel-collector-k8s.yaml --dry-run=client -o yaml | $(KC) kubectl apply -f -
+	$(KC) kubectl -n o11y create secret generic otel-collector --from-file=config.yaml=deploy/o11y/otel-collector/otel-collector-k8s.yaml --dry-run=client -o yaml | $(KC) kubectl apply -f -; \
+	[ -f deploy/o11y/otel-collector/otel-agent-k8s.yaml ] && $(KC) kubectl -n o11y create secret generic otel-agent --from-file=config.yaml=deploy/o11y/otel-collector/otel-agent-k8s.yaml --dry-run=client -o yaml | $(KC) kubectl apply -f - || true
 	set -a; [ -f .env ] && . ./.env; set +a; \
 	ESPW=$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}'); \
 	$(KC) kubectl -n o11y create secret generic grafana-env \
@@ -146,6 +152,7 @@ k8s-elastic-wire:
 		--from-literal=ELASTIC_ES_PASSWORD=$$ESPW \
 		--dry-run=client -o yaml | $(KC) kubectl apply -f -
 	$(KC) kubectl -n o11y rollout restart deployment/otel-collector daemonset/vector
+	-$(KC) kubectl -n o11y rollout restart daemonset/otel-agent
 	$(KC) kubectl -n o11y rollout status deployment/otel-collector --timeout=180s
 	$(KC) kubectl -n o11y rollout status daemonset/vector --timeout=180s
 	$(KC) kubectl -n o11y create configmap grafana-datasources --from-file=datasources.yaml=deploy/o11y/grafana/provisioning-k8s/datasources.yaml --dry-run=client -o yaml | $(KC) kubectl label --local -f - grafana_datasource=1 -o yaml | $(KC) kubectl apply -f -
@@ -154,9 +161,25 @@ k8s-elastic-wire:
 
 k8s-elastic-bootstrap:
 	ESAUTH="elastic:$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}')"; \
+	KIBANA_URL=http://kibana.tasklog-demo.orb.local ESAUTH="$$ESAUTH" bash deploy/o11y/elastic/kibana-cleanup.sh; \
+	$(KC) kubectl -n o11y exec -i statefulset/elasticsearch-es-default -c elasticsearch -- \
+		curl -sS -u "$$ESAUTH" -X PUT -H 'Content-Type: application/json' "http://localhost:9200/logs-tasklog*,traces-tasklog*,metrics-tasklog*/_settings" \
+		-d '{"index":{"refresh_interval":"1s"}}'; \
+	echo; \
 	$(KC) kubectl -n o11y exec -i statefulset/elasticsearch-es-default -c elasticsearch -- \
 		curl -sS -u "$$ESAUTH" -X PUT "http://localhost:9200/_ingest/pipeline/tasklog-logs" \
 		-H 'Content-Type: application/json' --data-binary @- < deploy/o11y/elastic/ingest-pipeline.json; \
+	echo; \
+	$(KC) kubectl -n o11y exec -i statefulset/elasticsearch-es-default -c elasticsearch -- \
+		curl -sS -u "$$ESAUTH" -X PUT "http://localhost:9200/_ingest/pipeline/tasklog-otel-apm-compat" \
+		-H 'Content-Type: application/json' --data-binary @- < deploy/o11y/elastic/apm-compat-pipeline.json; \
+	echo; \
+	$(KC) kubectl -n o11y exec -i statefulset/elasticsearch-es-default -c elasticsearch -- \
+		curl -sS -u "$$ESAUTH" -X PUT "http://localhost:9200/_component_template/traces-otel@custom" \
+		-H 'Content-Type: application/json' --data-binary @- < deploy/o11y/elastic/traces-otel-custom-template.json; \
+	echo; \
+	$(KC) kubectl -n o11y exec -i statefulset/elasticsearch-es-default -c elasticsearch -- sh -c \
+		'curl -sS -u "'$$ESAUTH'" "http://localhost:9200/traces-tasklog.otel-default/_settings" | grep -q tasklog-otel-apm-compat || curl -sS -u "'$$ESAUTH'" -X POST "http://localhost:9200/traces-tasklog.otel-default/_rollover"' || true; \
 	echo; \
 	curl -sS -u "$$ESAUTH" -X POST "http://kibana.tasklog-demo.orb.local/api/saved_objects/_import?overwrite=true" \
 		-H 'kbn-xsrf: true' -F file=@deploy/o11y/elastic/kibana-objects.ndjson; \
@@ -187,7 +210,7 @@ k8s-secrets:
 		--dry-run=client -o yaml | $(KC) kubectl apply -f -
 	set -a; [ -f .env ] && . ./.env; set +a; \
 	$(KC) kubectl -n tasklog create secret generic web-rum \
-		--from-literal=NUXT_PUBLIC_RUM_PROVIDER=$${NUXT_PUBLIC_RUM_PROVIDER:-none} \
+		--from-literal=NUXT_PUBLIC_RUM_PROVIDER=$${NUXT_PUBLIC_RUM_PROVIDER:-datadog} \
 		--from-literal=NUXT_PUBLIC_DD_SITE=$${DD_SITE:-} \
 		--from-literal=NUXT_PUBLIC_DD_RUM_APP_ID=$${DD_RUM_APP_ID:-} \
 		--from-literal=NUXT_PUBLIC_DD_RUM_CLIENT_TOKEN=$${DD_RUM_CLIENT_TOKEN:-} \

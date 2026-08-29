@@ -12,3 +12,5 @@ deploy/o11y/vector/vector-k8s.toml
 terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate*
+deploy/o11y/otel-collector/otel-agent-k8s.yaml
+.kube
