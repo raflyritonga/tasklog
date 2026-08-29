@@ -9,6 +9,9 @@ datasources:
     isDefault: true
     jsonData:
       timeInterval: 15s
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
 
   - name: Loki
     uid: loki

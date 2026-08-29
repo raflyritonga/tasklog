@@ -3,8 +3,6 @@ kind: DynaKube
 metadata:
   name: tasklog
   namespace: dynatrace
-  annotations:
-    feature.dynatrace.com/automatic-injection: "false"
 spec:
   apiUrl: __DT_API_URL__
   metadataEnrichment:

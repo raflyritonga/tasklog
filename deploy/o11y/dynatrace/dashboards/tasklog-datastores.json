@@ -26,7 +26,7 @@
     "1": {
       "type": "data",
       "title": "Cache hit ratio (%)",
-      "query": "fetch spans\n| filter isNotNull(cache.hit)\n| makeTimeseries hit_pct = countIf(cache.hit == true) * 100.0 / count(), interval:1m",
+      "query": "fetch spans\n| filter isNotNull(cache.hit)\n| makeTimeseries hits = countIf(cache.hit == true), total = count(), interval:1m\n| fieldsAdd hit_pct = hits[] * 100.0 / total[]\n| fields timeframe, interval, hit_pct",
       "visualization": "lineChart",
       "davis": {
         "enabled": false
@@ -47,7 +47,7 @@
     "2": {
       "type": "data",
       "title": "Postgres queries per minute",
-      "query": "fetch spans\n| filter db.system == \"postgresql\"\n| makeTimeseries queries = count(), interval:1m",
+      "query": "fetch spans\n| filter db.system.name == \"postgresql\"\n| makeTimeseries queries = count(), interval:1m",
       "visualization": "lineChart",
       "davis": {
         "enabled": false
@@ -68,7 +68,7 @@
     "3": {
       "type": "data",
       "title": "DB latency p95 by system",
-      "query": "fetch spans\n| filter isNotNull(db.system)\n| makeTimeseries p95 = percentile(duration, 95), by:{db.system}, interval:1m",
+      "query": "fetch spans\n| fieldsAdd dbsys = coalesce(db.system, db.system.name)\n| filter isNotNull(dbsys)\n| makeTimeseries p95 = percentile(duration, 95), by:{dbsys}, interval:1m",
       "visualization": "lineChart",
       "davis": {
         "enabled": false
@@ -89,7 +89,7 @@
     "4": {
       "type": "data",
       "title": "Top statements by mean duration",
-      "query": "fetch spans\n| filter db.system == \"postgresql\" and isNotNull(db.statement)\n| summarize mean_duration = avg(duration), calls = count(), by:{db.statement}\n| sort mean_duration desc\n| limit 10",
+      "query": "fetch spans\n| filter db.system.name == \"postgresql\" and isNotNull(db.query.text)\n| summarize mean_duration = avg(duration), calls = count(), by:{db.query.text}\n| sort mean_duration desc\n| limit 10",
       "visualization": "table",
       "davis": {
         "enabled": false

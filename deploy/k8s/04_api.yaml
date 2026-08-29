@@ -12,6 +12,8 @@ spec:
     metadata:
       labels:
         app: api
+      annotations:
+        dynatrace.com/inject: "false"
     spec:
       topologySpreadConstraints:
         - maxSkew: 1

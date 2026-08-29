@@ -62,7 +62,7 @@ async function initDatadog(config: PublicConfig, router: Router, nuxtApp: NuxtAp
     env: 'dev',
     version: config.version,
     sessionSampleRate: 100,
-    sessionReplaySampleRate: 20,
+    sessionReplaySampleRate: 100,
     trackResources: true,
     trackUserInteractions: true,
     trackLongTasks: true,

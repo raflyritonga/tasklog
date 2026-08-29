@@ -26,7 +26,7 @@
     "1": {
       "type": "data",
       "title": "Error ratio (%)",
-      "query": "fetch spans\n| filter span.kind == \"server\" and service.name == \"tasklog-api\"\n| makeTimeseries error_pct = countIf(request.is_failed == true) * 100.0 / count(), interval:1m",
+      "query": "fetch spans\n| filter span.kind == \"server\" and service.name == \"tasklog-api\"\n| makeTimeseries errors = countIf(request.is_failed == true), total = count(), interval:1m\n| fieldsAdd error_pct = errors[] * 100.0 / total[]\n| fields timeframe, interval, error_pct",
       "visualization": "lineChart",
       "davis": {
         "enabled": false
@@ -169,6 +169,48 @@
           "enableSparklines": false
         }
       }
+    },
+    "8": {
+      "type": "data",
+      "title": "RUM sessions",
+      "query": "fetch user.sessions\n| makeTimeseries sessions = count(), interval:5m",
+      "visualization": "barChart",
+      "davis": {
+        "enabled": false
+      },
+      "visualizationSettings": {
+        "chartSettings": {
+          "gapPolicy": "connect"
+        },
+        "thresholds": [],
+        "singleValue": {
+          "showLabel": true
+        },
+        "table": {
+          "enableSparklines": false
+        }
+      }
+    },
+    "9": {
+      "type": "data",
+      "title": "RUM events by type",
+      "query": "fetch user.events\n| makeTimeseries events = count(), by:{event.type}, interval:5m",
+      "visualization": "lineChart",
+      "davis": {
+        "enabled": false
+      },
+      "visualizationSettings": {
+        "chartSettings": {
+          "gapPolicy": "connect"
+        },
+        "thresholds": [],
+        "singleValue": {
+          "showLabel": true
+        },
+        "table": {
+          "enableSparklines": false
+        }
+      }
     }
   },
   "layouts": {
@@ -217,6 +259,18 @@
     "7": {
       "x": 12,
       "y": 18,
+      "w": 12,
+      "h": 6
+    },
+    "8": {
+      "x": 0,
+      "y": 24,
+      "w": 12,
+      "h": 6
+    },
+    "9": {
+      "x": 12,
+      "y": 24,
       "w": 12,
       "h": 6
     }
