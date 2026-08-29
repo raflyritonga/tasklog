@@ -189,6 +189,11 @@ k8s-elastic-bootstrap:
 	echo; \
 	curl -sS -u "$$ESAUTH" -X POST "http://kibana.tasklog-demo.orb.local/api/saved_objects/_import?overwrite=true" \
 		-H 'kbn-xsrf: true' -F file=@deploy/o11y/elastic/kibana-dashboard-apm.ndjson; \
+	echo; \
+	resp=$$(curl -sS -u "$$ESAUTH" -X POST "http://kibana.tasklog-demo.orb.local/api/detection_engine/rules" \
+		-H 'kbn-xsrf: true' -H 'Content-Type: application/json' --data-binary @deploy/o11y/elastic/security-detection-rule.json); \
+	echo "$$resp" | grep -q "already exists" && curl -sS -u "$$ESAUTH" -X PUT "http://kibana.tasklog-demo.orb.local/api/detection_engine/rules" \
+		-H 'kbn-xsrf: true' -H 'Content-Type: application/json' --data-binary @deploy/o11y/elastic/security-detection-rule.json > /dev/null || true; \
 	echo
 
 k8s-datadog:

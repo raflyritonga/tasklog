@@ -99,6 +99,47 @@ resource "datadog_dashboard" "tasklog" {
       message_display = "expanded-md"
     }
   }
+
+  widget {
+    timeseries_definition {
+      title = "RUM page views by path"
+      request {
+        display_type = "bars"
+        rum_query {
+          index        = "rum"
+          search_query = "@type:view"
+          compute_query {
+            aggregation = "count"
+          }
+          group_by {
+            facet = "@view.url_path"
+            limit = 10
+            sort_query {
+              aggregation = "count"
+              order       = "desc"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  widget {
+    timeseries_definition {
+      title = "RUM Largest Contentful Paint p75 (ns)"
+      request {
+        display_type = "line"
+        rum_query {
+          index        = "rum"
+          search_query = "@type:view"
+          compute_query {
+            aggregation = "pc75"
+            facet       = "@view.largest_contentful_paint"
+          }
+        }
+      }
+    }
+  }
 }
 
 # Mirrors Grafana's "Tasklog · Infrastructure" board from the k8s_cluster
@@ -170,11 +211,7 @@ resource "datadog_dashboard" "tasklog_infra" {
   }
 }
 
-# Mirrors Grafana's "Tasklog · Data stores" board, but span-powered: Datadog
-# receives every db/redis client span, so these widgets query indexed spans
-# (trace analytics) instead of exporter counters. Custom attributes like
-# @db.system and @cache.hit are searchable as-is; only *grouping* on them
-# would require creating a facet, which these queries avoid.
+
 resource "datadog_dashboard" "tasklog_data" {
   title       = "Tasklog · Data stores (Terraform)"
   description = "Redis and Postgres seen through client spans. Provisioned as code."

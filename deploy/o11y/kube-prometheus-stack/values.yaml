@@ -48,6 +48,8 @@ prometheus:
   prometheusSpec:
     retention: 6h
     scrapeInterval: 15s
+    enableFeatures:
+      - exemplar-storage
     resources:
       requests:
         cpu: 100m

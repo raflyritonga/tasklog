@@ -316,6 +316,86 @@
           "legendFormat": "{{component_id}}"
         }
       ]
+    },
+    {
+      "id": 103,
+      "type": "row",
+      "title": "Saturation (USE)",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "collapsed": false
+    },
+    {
+      "id": 104,
+      "type": "timeseries",
+      "title": "Node load (5m) vs CPU cores",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 27
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "node_load5",
+          "legendFormat": "load5"
+        },
+        {
+          "refId": "B",
+          "expr": "count(count by (cpu) (node_cpu_seconds_total{mode=\"idle\"}))",
+          "legendFormat": "cores"
+        }
+      ]
+    },
+    {
+      "id": 105,
+      "type": "timeseries",
+      "title": "Network errors and drops",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 27
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(node_network_receive_errs_total[5m]) + rate(node_network_transmit_errs_total[5m]))",
+          "legendFormat": "errors/s"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(node_network_receive_drop_total[5m]) + rate(node_network_transmit_drop_total[5m]))",
+          "legendFormat": "drops/s"
+        }
+      ]
     }
   ]
 }
