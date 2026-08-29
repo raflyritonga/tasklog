@@ -100,3 +100,220 @@ resource "datadog_dashboard" "tasklog" {
     }
   }
 }
+
+# Mirrors Grafana's "Tasklog · Infrastructure" board from the k8s_cluster
+# receiver copy (metrics/datadog-infra pipeline). Node/pod *usage* metrics
+# deliberately ship to Elasticsearch only, and pipeline health is Prometheus
+# territory - the note widget states both, same scope-note pattern as the
+# Dynatrace documents.
+resource "datadog_dashboard" "tasklog_infra" {
+  title       = "Tasklog · Infrastructure (Terraform)"
+  description = "Kubernetes cluster state from the OTel k8s_cluster receiver. Provisioned as code."
+  layout_type = "ordered"
+
+  widget {
+    timeseries_definition {
+      title = "Pod restarts (running total) by pod"
+      request {
+        q            = "max:k8s.container.restarts{*} by {pod_name}"
+        display_type = "line"
+      }
+    }
+  }
+
+  widget {
+    timeseries_definition {
+      title = "Containers ready by namespace"
+      request {
+        q            = "sum:k8s.container.ready{*} by {kube_namespace}"
+        display_type = "line"
+      }
+    }
+  }
+
+  widget {
+    timeseries_definition {
+      title = "CPU requested vs node allocatable"
+      request {
+        q            = "sum:k8s.container.cpu_request{*}"
+        display_type = "line"
+      }
+      request {
+        q            = "sum:k8s.node.allocatable_cpu{*}"
+        display_type = "line"
+      }
+    }
+  }
+
+  widget {
+    timeseries_definition {
+      title = "Deployments desired vs available"
+      request {
+        q            = "sum:k8s.deployment.desired{*} by {kube_deployment}"
+        display_type = "line"
+      }
+      request {
+        q            = "sum:k8s.deployment.available{*} by {kube_deployment}"
+        display_type = "line"
+      }
+    }
+  }
+
+  widget {
+    note_definition {
+      content          = "**Scope note.** This board shows Kubernetes *cluster state* (the `k8s_cluster` receiver copy). Node and pod *usage* (CPU/memory/throttling) ships to **Elasticsearch** via the otel-agent DaemonSet, and pipeline health (collector/Vector internals) lives in **Grafana/Prometheus**. There is no Datadog Agent in this cluster by design - one OTel pipeline feeds every platform."
+      background_color = "gray"
+      font_size        = "14"
+      text_align       = "left"
+      show_tick        = false
+    }
+  }
+}
+
+# Mirrors Grafana's "Tasklog · Data stores" board, but span-powered: Datadog
+# receives every db/redis client span, so these widgets query indexed spans
+# (trace analytics) instead of exporter counters. Custom attributes like
+# @db.system and @cache.hit are searchable as-is; only *grouping* on them
+# would require creating a facet, which these queries avoid.
+resource "datadog_dashboard" "tasklog_data" {
+  title       = "Tasklog · Data stores (Terraform)"
+  description = "Redis and Postgres seen through client spans. Provisioned as code."
+  layout_type = "ordered"
+
+  widget {
+    timeseries_definition {
+      title = "Redis operations by command (indexed spans)"
+      request {
+        display_type = "bars"
+        apm_query {
+          index        = "trace-search"
+          search_query = "service:${var.service} @db.system:redis"
+          compute_query {
+            aggregation = "count"
+          }
+          group_by {
+            facet = "resource_name"
+            limit = 10
+            sort_query {
+              aggregation = "count"
+              order       = "desc"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  widget {
+    timeseries_definition {
+      title = "Cache hits vs misses (@cache.hit span attribute)"
+      request {
+        display_type = "bars"
+        apm_query {
+          index        = "trace-search"
+          search_query = "service:${var.service} @cache.hit:true"
+          compute_query {
+            aggregation = "count"
+          }
+        }
+      }
+      request {
+        display_type = "bars"
+        apm_query {
+          index        = "trace-search"
+          search_query = "service:${var.service} @cache.hit:false"
+          compute_query {
+            aggregation = "count"
+          }
+        }
+      }
+    }
+  }
+
+  widget {
+    timeseries_definition {
+      title = "Postgres queries by statement (indexed spans)"
+      request {
+        display_type = "bars"
+        apm_query {
+          index        = "trace-search"
+          search_query = "service:${var.service} @db.system:postgresql"
+          compute_query {
+            aggregation = "count"
+          }
+          group_by {
+            facet = "resource_name"
+            limit = 10
+            sort_query {
+              aggregation = "count"
+              order       = "desc"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  widget {
+    timeseries_definition {
+      title = "DB span p95 duration (ns): Postgres vs Redis"
+      request {
+        display_type = "line"
+        apm_query {
+          index        = "trace-search"
+          search_query = "service:${var.service} @db.system:postgresql"
+          compute_query {
+            aggregation = "pc95"
+            facet       = "@duration"
+          }
+        }
+      }
+      request {
+        display_type = "line"
+        apm_query {
+          index        = "trace-search"
+          search_query = "service:${var.service} @db.system:redis"
+          compute_query {
+            aggregation = "pc95"
+            facet       = "@duration"
+          }
+        }
+      }
+    }
+  }
+
+  widget {
+    query_table_definition {
+      title = "Top DB statements by mean duration (ns)"
+      request {
+        apm_query {
+          index        = "trace-search"
+          search_query = "service:${var.service} @db.system:*"
+          compute_query {
+            aggregation = "avg"
+            facet       = "@duration"
+          }
+          group_by {
+            facet = "resource_name"
+            limit = 10
+            sort_query {
+              aggregation = "avg"
+              facet       = "@duration"
+              order       = "desc"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  widget {
+    note_definition {
+      content          = "**Scope note.** These widgets read *indexed spans* (Datadog's intelligent retention keeps errors, slow spans and a representative sample - counts are trends, not exact totals; exact request rates live on the Application board's trace metrics). Connection-pool utilization and transactions/second come from postgres-exporter counters, which stay in **Grafana/Prometheus**. What Datadog holds instead is the query-level truth: every statement with its real duration and the `cache.hit` business attribute."
+      background_color = "gray"
+      font_size        = "14"
+      text_align       = "left"
+      show_tick        = false
+    }
+  }
+}

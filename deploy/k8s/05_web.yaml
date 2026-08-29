@@ -12,6 +12,9 @@ spec:
     metadata:
       labels:
         app: web
+      annotations:
+        oneagent.dynatrace.com/inject: "true"
+        metadata-enrichment.dynatrace.com/inject: "true"
     spec:
       containers:
         - name: web
@@ -41,7 +44,7 @@ spec:
               memory: 128Mi
             limits:
               cpu: 300m
-              memory: 256Mi
+              memory: 512Mi
 ---
 apiVersion: v1
 kind: Service

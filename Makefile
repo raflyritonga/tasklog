@@ -200,6 +200,20 @@ k8s-datadog:
 	sed -e "s|__DD_SITE_FULL__|$$DD_SITE_FULL|" -e "s|__DEPLOY_ENV__|$${DEPLOY_ENV:-dev}|" deploy/o11y/datadog/values.yaml > /tmp/tasklog-dd-values.yaml; \
 	$(KC) helm upgrade --install datadog datadog/datadog --version 3.240.0 --namespace o11y -f /tmp/tasklog-dd-values.yaml --set datadog.apiKeyExistingSecret=datadog-secret --wait --timeout 10m
 
+k8s-dt-oneagent:
+	set -a; [ -f .env ] && . ./.env; set +a; \
+	if [ -z "$${DT_TENANT_URL:-}" ] || [ -z "$${DT_OPERATOR_TOKEN:-}" ]; then echo "DT_TENANT_URL or DT_OPERATOR_TOKEN not set in .env - skipping dynatrace oneagent"; exit 0; fi; \
+	$(KC) helm upgrade dynatrace-operator oci://public.ecr.aws/dynatrace/dynatrace-operator --version 1.10.2 --create-namespace --namespace dynatrace --install --atomic --timeout 10m; \
+	$(KC) kubectl -n dynatrace create secret generic tasklog \
+		--from-literal=apiToken=$${DT_OPERATOR_TOKEN} \
+		--from-literal=dataIngestToken=$${DT_API_TOKEN:-} \
+		--dry-run=client -o yaml | $(KC) kubectl apply -f -; \
+	sed "s|__DT_API_URL__|$${DT_TENANT_URL}/api|" deploy/o11y/dynatrace/oneagent/dynakube.yaml | $(KC) kubectl apply -f -; \
+	$(KC) kubectl label namespace tasklog dynatrace-inject=enabled --overwrite; \
+	$(KC) kubectl -n tasklog apply -f deploy/k8s/05_web.yaml; \
+	$(KC) kubectl -n tasklog rollout restart deployment/web; \
+	$(KC) kubectl -n tasklog rollout status deployment/web --timeout=180s
+
 k8s-secrets:
 	set -a; [ -f .env ] && . ./.env; set +a; \
 	$(KC) kubectl -n tasklog create secret generic tasklog-db \
@@ -229,7 +243,9 @@ k8s-reset:
 TF_ENV = set -a; [ -f .env ] && . ./.env; set +a; \
 	case "$${DD_SITE:-}" in "") site=datadoghq.com ;; *.*) site=$${DD_SITE} ;; *) site=$${DD_SITE}.datadoghq.com ;; esac; \
 	export TF_VAR_dd_api_key=$${DD_API_KEY} TF_VAR_dd_app_key=$${DD_APP_KEY} TF_VAR_dd_site=$$site; \
-	export TF_VAR_elastic_password=$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}' 2>/dev/null || echo "")
+	export TF_VAR_elastic_password=$$($(KC) kubectl -n o11y get secret elasticsearch-es-elastic-user -o go-template='{{.data.elastic | base64decode}}' 2>/dev/null || echo ""); \
+	export TF_VAR_dt_tenant_url=$${DT_TENANT_URL:-} TF_VAR_dt_api_token=$${DT_SETTINGS_TOKEN:-$${DT_API_TOKEN:-}}; \
+	export TF_VAR_dt_platform_token=$${DT_PLATFORM_TOKEN:-} TF_VAR_dt_actor_uuid=$${DT_ACTOR_UUID:-}
 
 datadog-tf-plan:
 	$(TF_ENV); terraform -chdir=terraform init -input=false && terraform -chdir=terraform plan

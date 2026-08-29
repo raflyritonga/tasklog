@@ -1,0 +1,126 @@
+{
+  "version": 16,
+  "variables": [],
+  "tiles": {
+    "0": {
+      "type": "data",
+      "title": "Pod restarts (cluster-wide)",
+      "query": "timeseries restarts = sum(k8s.container.restarts), interval:1m",
+      "visualization": "lineChart",
+      "davis": {
+        "enabled": false
+      },
+      "visualizationSettings": {
+        "chartSettings": {
+          "gapPolicy": "connect"
+        },
+        "thresholds": [],
+        "singleValue": {
+          "showLabel": true
+        },
+        "table": {
+          "enableSparklines": false
+        }
+      }
+    },
+    "1": {
+      "type": "data",
+      "title": "Containers ready by namespace",
+      "query": "timeseries ready = sum(k8s.container.ready), by:{k8s.namespace.name}, interval:1m",
+      "visualization": "lineChart",
+      "davis": {
+        "enabled": false
+      },
+      "visualizationSettings": {
+        "chartSettings": {
+          "gapPolicy": "connect"
+        },
+        "thresholds": [],
+        "singleValue": {
+          "showLabel": true
+        },
+        "table": {
+          "enableSparklines": false
+        }
+      }
+    },
+    "2": {
+      "type": "data",
+      "title": "CPU requested vs node allocatable (cores)",
+      "query": "timeseries requested = sum(k8s.container.cpu_request), allocatable = sum(k8s.node.allocatable_cpu), interval:1m",
+      "visualization": "lineChart",
+      "davis": {
+        "enabled": false
+      },
+      "visualizationSettings": {
+        "chartSettings": {
+          "gapPolicy": "connect"
+        },
+        "thresholds": [],
+        "singleValue": {
+          "showLabel": true
+        },
+        "table": {
+          "enableSparklines": false
+        }
+      }
+    },
+    "3": {
+      "type": "data",
+      "title": "Deployments: desired vs available",
+      "query": "timeseries desired = sum(k8s.deployment.desired), available = sum(k8s.deployment.available), interval:1m",
+      "visualization": "lineChart",
+      "davis": {
+        "enabled": false
+      },
+      "visualizationSettings": {
+        "chartSettings": {
+          "gapPolicy": "connect"
+        },
+        "thresholds": [],
+        "singleValue": {
+          "showLabel": true
+        },
+        "table": {
+          "enableSparklines": false
+        }
+      }
+    },
+    "4": {
+      "type": "markdown",
+      "content": "## Scope note\n\nThis mirrors *Tasklog - Infrastructure* in Grafana within what Dynatrace receives: **cluster state** from the collector's `k8s_cluster` receiver.\n\n- **Node/pod CPU & memory usage** ship to Elasticsearch (agent-mode collector) - by design, one usage consumer.\n- **Collector/Vector pipeline health** lives in Prometheus/Grafana.\n- Full host depth here would require OneAgent, excluded by the no-vendor-agent rule."
+    }
+  },
+  "layouts": {
+    "0": {
+      "x": 0,
+      "y": 0,
+      "w": 12,
+      "h": 6
+    },
+    "1": {
+      "x": 12,
+      "y": 0,
+      "w": 12,
+      "h": 6
+    },
+    "2": {
+      "x": 0,
+      "y": 6,
+      "w": 12,
+      "h": 6
+    },
+    "3": {
+      "x": 12,
+      "y": 6,
+      "w": 12,
+      "h": 6
+    },
+    "4": {
+      "x": 0,
+      "y": 12,
+      "w": 12,
+      "h": 6
+    }
+  }
+}

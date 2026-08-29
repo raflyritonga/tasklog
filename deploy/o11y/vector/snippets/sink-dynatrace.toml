@@ -1,7 +1,3 @@
-
-# Dynatrace generic log ingest. Flat dotted keys (service.name, k8s.pod.name)
-# are Dynatrace's recognized semantic attributes; W3C trace_id/span_id stay for
-# log-to-trace correlation. content/severity/timestamp are the reserved fields.
 [transforms.shape_dynatrace]
 type = "remap"
 inputs = ["drop_noise"]
@@ -22,9 +18,6 @@ del(.dd)
 del(.env)
 '''
 
-# The ingest API wants one JSON ARRAY per request; Vector's http sink builds it
-# from payload_prefix/suffix plus comma framing. Token substituted at render
-# time (Vector does not interpolate env vars); rendered file is a k8s Secret.
 [sinks.dynatrace]
 type = "http"
 inputs = ["shape_dynatrace"]
@@ -45,4 +38,4 @@ Authorization = "Api-Token __DT_API_TOKEN__"
 Content-Type = "application/json"
 
 [sinks.dynatrace.batch]
-max_events = 100
+max_events = 1

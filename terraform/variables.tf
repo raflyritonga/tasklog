@@ -69,3 +69,14 @@ variable "dt_request_metric" {
   type    = string
   default = "http.server.request.count"
 }
+
+variable "dt_platform_token" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "dt_actor_uuid" {
+  type    = string
+  default = ""
+}
