@@ -14,6 +14,13 @@ spec:
         disabled: true
   config:
     apm-server:
+      auth:
+        anonymous:
+          enabled: true
+          allow_agent:
+            - rum-js
+            - js-base
+            - otlp
       rum:
         enabled: true
         allow_origins:
