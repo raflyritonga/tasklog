@@ -10,7 +10,6 @@ type = "prometheus_exporter"
 inputs = ["internal"]
 address = "0.0.0.0:9598"
 
-# Compose twin of the k8s normalize: same canonical event, docker metadata in.
 [transforms.normalize]
 type = "remap"
 inputs = ["docker"]

@@ -41,8 +41,6 @@ render() {
     trace_exporters="$trace_exporters, datadog, datadog/connector"
     metric_exporters="$metric_exporters, datadog"
     metric_receivers="$metric_receivers, datadog/connector"
-    # Cluster-state copy for the Datadog infrastructure dashboard. The datadog
-    # exporter translates cumulative OTLP itself, so no cumulativetodelta here.
     if [ "$stage" = "k8s" ]; then
       extra_pipelines="$extra_pipelines
     metrics/datadog-infra:
@@ -68,9 +66,6 @@ render() {
       exporters: [otlphttp/dynatrace]"
   fi
 
-  # APM Server (OTLP intake) is the supported path into Kibana's Applications UI:
-  # it writes native traces-apm-* data streams, so tasklog-api joins tasklog-web
-  # (RUM) in the Service Inventory and in end-to-end traces.
   apm_endpoint="${ELASTIC_APM_ENDPOINT:-}"
   if [ "$stage" = "k8s" ] && [ -n "${ELASTIC_APM_ENDPOINT_K8S:-}" ]; then
     apm_endpoint="$ELASTIC_APM_ENDPOINT_K8S"
@@ -93,9 +88,6 @@ render() {
     else
       elastic_trace_processors="filter/probe_noise, resource/tasklog_ds, batch"
     fi
-    # When APM Server handles app traces/metrics, skip the raw elasticsearch/otel
-    # copies of the same OTLP data (avoids double-written traces that the APM UI
-    # cannot read). Infra metrics and logs still go direct to Elasticsearch.
     if [ -z "$apm_endpoint" ]; then
       extra_pipelines="$extra_pipelines
     traces/elastic:

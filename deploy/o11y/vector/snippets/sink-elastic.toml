@@ -1,6 +1,3 @@
-# ECS shaping. client_ip becomes client.ip - the field the tasklog-logs ingest
-# pipeline's geoip processor reads; rename here and there together. event.duration
-# is nanoseconds, ECS convention (duration_ms x 1,000,000).
 [transforms.shape_elastic]
 type = "remap"
 inputs = ["drop_noise"]
@@ -37,9 +34,6 @@ del(.duration_ms)
 del(.k8s)
 '''
 
-# data_stream mode writes logs-tasklog.api-dev. Credentials are substituted at
-# render time (Vector 0.57 does not interpolate env vars); the rendered file is
-# a k8s Secret, never a ConfigMap.
 [sinks.elastic]
 type = "elasticsearch"
 inputs = ["shape_elastic"]

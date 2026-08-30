@@ -142,11 +142,6 @@ resource "datadog_dashboard" "tasklog" {
   }
 }
 
-# Mirrors Grafana's "Tasklog · Infrastructure" board from the k8s_cluster
-# receiver copy (metrics/datadog-infra pipeline). Node/pod *usage* metrics
-# deliberately ship to Elasticsearch only, and pipeline health is Prometheus
-# territory - the note widget states both, same scope-note pattern as the
-# Dynatrace documents.
 resource "datadog_dashboard" "tasklog_infra" {
   title       = "Tasklog · Infrastructure (Terraform)"
   description = "Kubernetes cluster state from the OTel k8s_cluster receiver. Provisioned as code."
