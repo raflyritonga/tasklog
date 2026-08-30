@@ -10,8 +10,6 @@ type = "prometheus_exporter"
 inputs = ["internal"]
 address = "0.0.0.0:9598"
 
-# One canonical event, built once. Platform-specific shaping happens in the
-# shape_* transforms downstream, never here and never in the app.
 [transforms.normalize]
 type = "remap"
 inputs = ["k8s"]
@@ -67,11 +65,6 @@ del(.k8s.workload)
 del(.version)
 '''
 
-# Labels are for stream selection only: few fields, few values. Never label
-# pod, trace_id, client_ip, status or duration - each unique combination is its
-# own stream, and unbounded values melt Loki. Grafana finds traces via a derived
-# field on the body, not a label:
-#   regex "trace_id":"(\w+)" -> Tempo datasource.
 [sinks.loki]
 type = "loki"
 inputs = ["shape_loki"]

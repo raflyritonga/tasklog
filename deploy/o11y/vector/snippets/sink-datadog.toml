@@ -1,9 +1,4 @@
 
-# Order-critical: Datadog reserves `status` for the log LEVEL. Move the HTTP
-# status out first, then put the level into `status` - reversed, the level
-# overwrites the HTTP code. `dd.trace_id`/`dd.span_id` stay: they are the decimal
-# ids Datadog's log-to-APM remapper reads; the W3C hex ids are useless here.
-# Durations are nanoseconds because that is what Datadog's duration remapper expects.
 [transforms.shape_datadog]
 type = "remap"
 inputs = ["drop_noise"]

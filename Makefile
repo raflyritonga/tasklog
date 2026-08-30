@@ -1,11 +1,6 @@
 .DEFAULT_GOAL := help
 
-API_URL ?= http://localhost:8080
-LOAD_URL ?= http://tasklog-demo.orb.local
-K6_DURATION ?= 10m
-DEMO_MS ?= 800
-DEMO_RATE ?= 0.5
-DEMO_CPU_MS ?= 60
+-include make.env
 
 KC = KUBECONFIG=./kubeconfig
 GRAFANA_STACK = -f compose.yaml -f compose.telemetry.yaml -f compose.grafana.yaml
@@ -13,7 +8,7 @@ O11Y_STACK = -f compose.yaml -f compose.telemetry.yaml -f compose.grafana.yaml -
 
 DD_SITE_SHELL = case "$${DD_SITE:-}" in "") DD_SITE_FULL=datadoghq.com ;; *.*) DD_SITE_FULL=$${DD_SITE} ;; *) DD_SITE_FULL=$${DD_SITE}.datadoghq.com ;; esac; export DD_SITE_FULL
 
-.PHONY: help docker k8s cluster tf clean reset down datadog-tf-plan datadog-tf-apply k8s-elastic-bootstrap docker-grafana docker-o11y docker-down k8s-cluster k8s-app k8s-o11y k8s-elastic k8s-datadog k8s-down k8s-reset k8s-secrets k8s-elastic-wire load demo-latency demo-errors demo-reset
+.PHONY: help docker k8s cluster tf clean reset down datadog-tf-plan datadog-tf-apply k8s-elastic-bootstrap docker-grafana docker-o11y docker-down k8s-cluster k8s-app k8s-o11y k8s-o11y-wire k8s-elastic k8s-datadog k8s-dt-oneagent k8s-down k8s-reset k8s-secrets load demo-latency demo-errors demo-cpu demo-reset
 
 help:
 	@echo "Tasklog"
@@ -131,8 +126,6 @@ k8s-elastic:
 	$(KC) kubectl -n o11y wait --for=jsonpath='{.status.phase}'=Ready elasticsearch/elasticsearch --timeout=600s
 	$(KC) kubectl -n o11y wait --for=jsonpath='{.status.health}'=green kibana/kibana --timeout=600s
 	$(MAKE) k8s-o11y-wire
-
-k8s-elastic-wire: k8s-o11y-wire
 
 k8s-o11y-wire:
 	set -a; [ -f .env ] && . ./.env; set +a; \

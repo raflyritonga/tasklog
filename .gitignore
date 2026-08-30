@@ -14,3 +14,5 @@ terraform/.terraform.lock.hcl
 terraform/terraform.tfstate*
 deploy/o11y/otel-collector/otel-agent-k8s.yaml
 .kube
+make.env
+.DS_Store
