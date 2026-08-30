@@ -4,6 +4,8 @@ inputs = ["drop_noise"]
 source = '''
 .content = string(.message) ?? "(no message)"
 del(.message)
+st = del(.status)
+if st != null { ."http.response.status_code" = st }
 .severity = string(.level) ?? "info"
 del(.level)
 ."service.name" = string(.service) ?? "unknown"
