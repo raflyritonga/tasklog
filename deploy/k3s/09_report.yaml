@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: report
+  namespace: tasklog
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: report
+  template:
+    metadata:
+      labels:
+        app: report
+    spec:
+      containers:
+        - name: report
+          image: ghcr.io/raflyritonga/tasklog-report:datadog
+          imagePullPolicy: Always
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: tasklog-db
+                  key: DATABASE_URL
+          ports:
+            - containerPort: 8090
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8090
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8090
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 100m
+              memory: 192Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: report
+  namespace: tasklog
+spec:
+  selector:
+    app: report
+  ports:
+    - port: 8090
+      targetPort: 8090

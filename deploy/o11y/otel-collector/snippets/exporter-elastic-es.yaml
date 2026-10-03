@@ -1,9 +1,0 @@
-  elasticsearch/otel:
-    endpoints:
-      - __ELASTIC_ES_ENDPOINT__
-    flush:
-      interval: 5s
-    user: __ELASTIC_ES_USER__
-    password: __ELASTIC_ES_PASSWORD__
-    mapping:
-      mode: otel

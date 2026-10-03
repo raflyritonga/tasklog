@@ -9,8 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 var ErrNotFound = errors.New("task not found")
@@ -31,10 +29,8 @@ func NewStore(db *pgxpool.Pool, rdb *redis.Client) *Store {
 func (s *Store) List(ctx context.Context) ([]Task, error) {
 	var tasks []Task
 	if s.cacheGet(ctx, "tasks:all", &tasks) {
-		trace.SpanFromContext(ctx).SetAttributes(attribute.Bool("cache.hit", true))
 		return tasks, nil
 	}
-	trace.SpanFromContext(ctx).SetAttributes(attribute.Bool("cache.hit", false))
 	rows, err := s.db.Query(ctx, "select "+taskColumns+" from tasks order by created_at desc limit 100")
 	if err != nil {
 		return nil, err

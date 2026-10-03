@@ -1,4 +1,0 @@
-  otlphttp/dynatrace:
-    endpoint: __DT_TENANT_URL__/api/v2/otlp
-    headers:
-      Authorization: Api-Token ${env:DT_API_TOKEN}

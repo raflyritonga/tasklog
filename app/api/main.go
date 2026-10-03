@@ -10,18 +10,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
-	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
-	"go.opentelemetry.io/otel/metric/noop"
 
 	"github.com/raflyritonga/tasklog/app/api/demo"
 	"github.com/raflyritonga/tasklog/app/api/health"
-	"github.com/raflyritonga/tasklog/app/api/obs"
-	"github.com/raflyritonga/tasklog/app/api/report"
 	"github.com/raflyritonga/tasklog/app/api/task"
 )
 
@@ -29,30 +23,15 @@ var version = "dev"
 
 func main() {
 	cfg := loadConfig()
-	logger := obs.NewLogger("tasklog-api")
-	slog.SetDefault(logger)
+	logger := slog.Default()
 
 	ctx := context.Background()
-	otelShutdown, err := obs.Setup(ctx, cfg.otlpEndpoint, version, cfg.deployEnv)
-	if err != nil {
-		logger.Error("otel setup failed", "err", err.Error())
-		os.Exit(1)
-	}
-
-	stopProfiler, profiling, err := obs.StartProfiler("tasklog-api", version, cfg.deployEnv)
-	if err != nil {
-		logger.Warn("datadog profiler failed to start", "err", err.Error())
-	} else if profiling {
-		logger.Info("datadog continuous profiler started", "version", version, "env", cfg.deployEnv)
-	}
-	defer stopProfiler()
 
 	dbConfig, err := pgxpool.ParseConfig(cfg.databaseURL)
 	if err != nil {
 		logger.Error("invalid database url", "err", err.Error())
 		os.Exit(1)
 	}
-	dbConfig.ConnConfig.Tracer = otelpgx.NewTracer()
 	db, err := pgxpool.NewWithConfig(ctx, dbConfig)
 	if err != nil {
 		logger.Error("postgres pool setup failed", "err", err.Error())
@@ -60,30 +39,17 @@ func main() {
 	}
 
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.redisAddr})
-	if err := redisotel.InstrumentTracing(rdb); err != nil {
-		logger.Warn("redis tracing instrumentation failed", "err", err.Error())
-	}
 
 	levers := &demo.Levers{}
 
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
-	e.Use(otelecho.Middleware("tasklog-api",
-		otelecho.WithMeterProvider(noop.NewMeterProvider()),
-		otelecho.WithSkipper(func(c echo.Context) bool {
-			path := c.Request().URL.Path
-			return path == "/healthz" || path == "/readyz"
-		}),
-	))
-	e.Use(obs.Metrics())
-	e.Use(obs.RequestLogger(logger))
 	e.Use(demo.Middleware(levers))
 
 	health.NewHandler(db, rdb).Register(e)
 	api := e.Group("/api")
 	task.NewHandler(task.NewStore(db, rdb)).Register(api)
-	report.NewHandler(db).Register(api)
 	demo.NewHandler(levers, logger).Register(api)
 
 	go func() {
@@ -105,7 +71,4 @@ func main() {
 	}
 	db.Close()
 	rdb.Close()
-	if err := otelShutdown(shutdownCtx); err != nil {
-		logger.Error("otel shutdown failed", "err", err.Error())
-	}
 }

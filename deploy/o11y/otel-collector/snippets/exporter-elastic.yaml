@@ -1,4 +1,0 @@
-  otlphttp/elastic:
-    endpoint: __ELASTIC_APM_ENDPOINT__
-    headers:
-      Authorization: Bearer ${env:ELASTIC_APM_SECRET_TOKEN}

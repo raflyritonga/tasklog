@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed
+  namespace: tasklog
+spec:
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: Never
+      activeDeadlineSeconds: 300
+      initContainers:
+        - name: wait-pg
+          image: postgres:16.10-alpine
+          command:
+            - sh
+            - -c
+            - until pg_isready -h pg; do sleep 2; done
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 20m
+              memory: 32Mi
+      containers:
+        - name: seed
+          image: postgres:16.10-alpine
+          command:
+            - psql
+            - -c
+            - select seed_tasks();
+          env:
+            - name: PGHOST
+              value: pg
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: tasklog-db
+                  key: POSTGRES_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tasklog-db
+                  key: POSTGRES_PASSWORD
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: tasklog-db
+                  key: POSTGRES_DB
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi

@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tasklog
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: long-running
+  namespace: tasklog
+spec:
+  scopes:
+    - NotTerminating
+  hard:
+    pods: "6"
+    requests.cpu: 900m
+    limits.cpu: 900m
+    requests.memory: 1152Mi
+    limits.memory: 1152Mi
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: jobs
+  namespace: tasklog
+spec:
+  scopes:
+    - Terminating
+  hard:
+    pods: "1"
+    requests.cpu: 100m
+    limits.cpu: 100m
+    requests.memory: 128Mi
+    limits.memory: 128Mi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: tasklog
+  namespace: tasklog
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 50m
+        memory: 64Mi
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      max:
+        cpu: 250m
+        memory: 256Mi

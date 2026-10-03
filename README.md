@@ -1,92 +1,71 @@
-# Tasklog
+# Tasklog — `datadog` branch
 
-A small task CRUD app (Nuxt 3 + Go + Postgres + Redis) built to demonstrate one telemetry pipeline delivering to **four observability platforms simultaneously**: a self-hosted Grafana stack (Prometheus, Loki, Tempo), self-hosted Elastic (ECK), Datadog, and Dynatrace.
+The Tasklog app with **zero observability wiring**: no OpenTelemetry, no vendor SDK, no agent config, no Terraform. It exists to be instrumented with Datadog from scratch — the step-by-step guide is in [DATADOG.md](DATADOG.md).
 
-The app is deliberately simple — the observability wiring is the product.
-
-## How it works
-
-- **Instrument once.** The API uses the OpenTelemetry SDK for traces and metrics (OTLP) and writes structured JSON logs to stdout with a `trace_id` on every line. No vendor code in the app for the three core signals.
-- **OTel Collector** fans traces and metrics out to Tempo, Prometheus, Elastic APM Server, Datadog, and Dynatrace.
-- **Vector** tails logs once and shapes them per platform: Loki labels, full ECS, Datadog conventions, Dynatrace flat keys.
-- **Split by design:** Collector = traces + metrics, Vector = logs.
-- **RUM** is a browser toggle (Datadog default · Dynatrace · Elastic) — beacons go browser → vendor directly.
-- **Agents only where OTLP can't deliver:** Datadog agent (infra + DBM + profile upload), Dynatrace OneAgent (web pod only, profiling), otel-agent DaemonSet (host metrics → Elasticsearch).
-- Everything renders from one script: `deploy/o11y/render.sh` emits exporters and sinks **only for credentials present in `.env`** — an empty `.env` yields the pure Grafana path.
+## What's here
 
 ```
-browser ──► ingress ──► web (Nuxt SSR) ──► api (Go + Echo) ──► Postgres / Redis
-                                              │
-                    OTel SDK (traces+metrics) │ JSON logs (stdout, trace_id)
-                                              ▼
-     OTel Collector ──► Tempo · Prometheus · APM Server · Datadog · Dynatrace
-     Vector ──────────► Loki · Elasticsearch · Datadog Logs · Dynatrace Logs
-     browser RUM ─────► one vendor per browser (toggle, top-right in the app)
+browser ──► Traefik (k3s ingress) ──► nginx ──┬─ /api/reports/* ──► report (Python + Flask) ──► Postgres
+                                              ├─ /api/*         ──► api (Go + Echo) ──────────► Postgres / Redis
+                                              └─ /*             ──► web (Nuxt SSR)
 ```
 
-## Stack
+- **web** — Nuxt 3 SSR UI.
+- **api** — Go + Echo CRUD with cache-aside Redis, health probes (`/healthz`, `/readyz`), and failure-injection levers (`/api/demo/*`). Instrumented **by hand**, because Go has no Single Step Instrumentation.
+- **report** — Python + Flask, one endpoint (`/api/reports/summary`), about 85 MB of RAM on one gunicorn worker. Its query carries a deliberate `pg_sleep(0.3)`. Instrumented with **zero code** through Single Step Instrumentation — the contrast with the api is the point.
+- **nginx** — edge reverse proxy; one config ([deploy/nginx/default.conf](deploy/nginx/default.conf)) shared by k3s and compose.
+- **Postgres 16** + **Redis 7.4** (capped at 48 MB with LRU eviction), seeded with 50 tasks.
 
-Nuxt 3 · Go (Echo) · PostgreSQL 16 · Redis · OpenTelemetry · Vector · Prometheus · Loki · Tempo · Grafana · ECK (Elasticsearch, Kibana, APM Server) · k6 · kind · Ansible · Terraform · GitHub Actions → GHCR
+The UI shows live stats from `report`: totals by status, a completion bar, and tasks created per day over the last 7 days. It refreshes every 30 seconds and right after each change, so `report` gets steady traffic whenever the app is open. A status filter narrows the task list. If `report` goes down, the panel keeps the last values and says it's stale, and the rest of the app keeps working.
+- No telemetry at all: the api prints only plain startup/shutdown lines. Request logging, tracing and profiling are added by you in [DATADOG.md](DATADOG.md).
 
-## Setup (one-time)
+## Setup
 
-1. **GitHub / GHCR** — public repo with Actions enabled; set both GHCR packages (`tasklog-api`, `tasklog-web`) to Public after the first CI run.
-2. **Datadog trial** — `DD_SITE`, `DD_API_KEY`, `DD_APP_KEY` (Terraform), RUM app → `DD_RUM_APP_ID` + `DD_RUM_CLIENT_TOKEN`.
-3. **Dynatrace trial** — `DT_TENANT_URL` (the `.live.` domain), ingest token → `DT_API_TOKEN`, operator token → `DT_OPERATOR_TOKEN`, RUM script src → `DT_RUM_SCRIPT_URL`; for Terraform detectors: `DT_PLATFORM_TOKEN` + `DT_ACTOR_UUID` (and optionally `DT_SETTINGS_TOKEN`).
-4. **Elastic** — nothing to sign up for: Elasticsearch, Kibana and APM Server run in-cluster via ECK; credentials are pulled from the operator's secret at deploy time. Only `ELASTIC_RUM_ENDPOINT` (the APM ingress URL) matters for browser RUM.
-5. `cp .env.example .env` and fill in what you have — missing credentials just mean that platform isn't rendered.
-6. `cp make.env.example make.env` — demo/load knobs (`API_URL`, `LOAD_URL`, `K6_DURATION`, …) live there, gitignored.
-7. **OrbStack VM** (k8s stage) — machine named `tasklog-demo` (~6 CPU / 12 GB); the name is the domain (`tasklog-demo.orb.local`).
+1. `cp .env.datadog.example .env.datadog` and fill it in: the app's database settings plus your Datadog keys (`DD_API_KEY`, `DD_SITE`, and the DBM/RUM values used later in the guide). This branch reads **only** `.env.datadog`. `.env` belongs to `main`, and every `make` target refuses to run until `.env.datadog` exists, so compose can't fall back to `main`'s `.env`.
+2. In the same file, set `APP_URL` (the nginx entry point: `http://localhost:8000` on compose, a k3s node's address on k3s) plus the `K6_DURATION` and `DEMO_*` knobs used by `load` and `demo-*`.
+3. For k3s: copy the cluster's kubeconfig to `./kubeconfig` (on the server it's `/etc/rancher/k3s/k3s.yaml`; replace `127.0.0.1` with the server's address if you run `make` from another machine).
+4. Images: pushing this branch builds `ghcr.io/<owner>/tasklog-{api,web,report}:datadog` via CI — set the three GHCR packages to Public, or import locally built images into k3s with `docker save <image> | sudo k3s ctr images import -`.
 
-## Quickstart
+## Run
 
 ```bash
-docker compose up -d --build --wait      # app only, http://localhost:3000
-make docker-grafana                      # + self-hosted telemetry, works with empty .env
-make docker-o11y                         # + every SaaS with credentials in .env
+make docker      # local: app + nginx on compose, http://localhost:8000
+make k8s         # k3s: everything in the tasklog namespace, via the built-in Traefik ingress
+make load        # k6 against APP_URL
+make demo-errors # failure levers: demo-errors / demo-latency / demo-cpu / demo-reset
 ```
 
-Kubernetes:
-
-```bash
-make cluster     # once per VM: kind + Traefik + metrics-server
-make k8s         # app + telemetry + grafana + elastic + datadog, in dependency order
-make tf          # alerts + dashboards as code on Datadog, Dynatrace, Elastic
-make k8s-dt-oneagent   # Dynatrace operator + OneAgent injection (web pod only)
-make load        # k6 against LOAD_URL
-```
-
-App at `http://tasklog-demo.orb.local`, Grafana at `http://grafana.tasklog-demo.orb.local`, Kibana at `http://kibana.tasklog-demo.orb.local`.
-
-## Make targets
+On k3s the ingress has no host rule, so the app answers on any node's address, port 80.
 
 | Target | What it does |
 |---|---|
-| `cluster` / `k8s` / `docker` | provision, full k8s stack, full compose stack |
-| `tf` | Terraform: 2 Datadog monitors + 2 dashboards + percentiles, 2 Elastic rules, 1 Davis detector |
-| `k8s-o11y-wire` | render + deliver every vendor config, restart the pipeline — **run after any `k8s-o11y`** |
-| `k8s-elastic-bootstrap` | ingest pipelines, templates, saved objects, detection rule |
-| `k8s-dt-oneagent` | Dynatrace operator (helm) + DynaKube + web-pod injection |
-| `load` / `demo-errors` / `demo-latency` / `demo-cpu` / `demo-reset` | k6 + failure-injection levers (knobs in `make.env`) |
-| `down` / `clean` / `reset` | stop compose / delete namespaces / rebuild the cluster |
+| `docker` / `docker-ghcr` / `down` | compose up (built locally / from GHCR images) / down |
+| `k8s` / `k8s-down` | deploy to k3s / delete the namespace |
+| `k8s-secrets` / `k8s-config` | DB secret from `.env.datadog` / ConfigMaps for init SQL + nginx |
+| `load`, `demo-*` | k6 load and failure-injection levers |
 
-Granular targets exist per component: `k8s-app`, `k8s-o11y`, `k8s-elastic`, `k8s-datadog`, `k8s-secrets`, `datadog-tf-plan`.
+## Runtime model — one pod each, fixed resources
 
-## Profiling — the honest exception
+Every workload runs **exactly one pod**, with `strategy: Recreate`, so a rollout never runs two pods at once. Every container has **requests = limits** (Guaranteed QoS): nothing can burst, and it gets evicted last under node pressure.
 
-Profiling is the one pillar OTel can't yet deliver, so it's the only vendor code in the app: Datadog's Go profiler, env-gated and off by default.
-
-| Variable | Default | Effect |
+| Pod | CPU | Memory |
 |---|---|---|
-| `DD_PROFILING_ENABLED` | off | starts the profiler; unset = no Datadog code runs |
-| `DD_PROFILING_CONTENTION` | off | adds goroutine/mutex/block profiles (extra overhead) |
-| `DD_AGENT_HOST` | `localhost` | upload target — on k8s the node IP (`status.hostIP`) |
+| pg | 250m | 256Mi |
+| web | 200m | 256Mi |
+| report | 100m | 192Mi |
+| api | 100m | 128Mi |
+| nginx | 50m | 64Mi |
+| redis | 50m | 64Mi |
+| **total** | **750m** | **960Mi** |
 
-Profiles join traces on the exact `service`/`env`/`version` triple; a mismatch uploads fine and silently never links. Dynatrace profiling rides OneAgent on the web pod instead — note the OneAgent host DaemonSet requires amd64 nodes and will not schedule on an arm64 (Apple Silicon) lab.
+The namespace enforces this ([01_namespace.yaml](deploy/k3s/01_namespace.yaml)):
 
-## Design notes
+- A `long-running` quota allows **6 pods** — one per workload. Any scale-up, HPA, or extra pod is rejected when the pod is created.
+- A separate `jobs` quota allows the seed Job one pod at a time.
+- A `LimitRange` gives defaults to any container that doesn't declare limits, and caps every container at 250m / 256Mi.
 
-- No abstraction without two concrete users; boring beats clever.
-- Vendors are configuration, not code: adding Dynatrace touched `render.sh`, not the app.
-- Vendors reserve field names — `status` means log *level* to Datadog and Dynatrace; the Vector shapers translate per platform, covered by unit tests (`vector test`).
-- Plain manifests for our workloads, pinned Helm for third-party, Terraform for SaaS control planes, dashboards in each platform's own idiom.
+The CPU limits are deliberately tight: under `make load` or `make demo-cpu` you'll see CPU throttling, which is a useful signal to find in Datadog.
+
+## Next
+
+Follow [DATADOG.md](DATADOG.md) in order: agent on k3s → unified tagging → Go api with dd-trace-go (Go has no Single Step Instrumentation) → Node web via Single Step Instrumentation → nginx module → Postgres DBM, Redis, nginx → RUM → profiling.
